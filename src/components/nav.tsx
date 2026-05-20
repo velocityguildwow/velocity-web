@@ -53,19 +53,6 @@ export function Nav({ user }: NavProps) {
                 {link.label}
               </Link>
             ))}
-            {user.isAdmin && (
-              <Link
-                href="/admin"
-                className={cn(
-                  "px-3 py-1.5 rounded-md text-sm transition-colors",
-                  pathname.startsWith("/admin")
-                    ? "bg-muted text-foreground font-medium"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                )}
-              >
-                Admin
-              </Link>
-            )}
           </nav>
         </div>
 

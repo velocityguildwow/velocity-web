@@ -2,18 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  startOfMonth,
-  endOfMonth,
-  startOfWeek,
-  endOfWeek,
-  eachDayOfInterval,
-  isSameMonth,
-  isToday,
-  format,
-  addMonths,
-  subMonths,
-} from "date-fns";
+import { startOfMonth } from "date-fns/startOfMonth";
+import { endOfMonth } from "date-fns/endOfMonth";
+import { startOfWeek } from "date-fns/startOfWeek";
+import { endOfWeek } from "date-fns/endOfWeek";
+import { eachDayOfInterval } from "date-fns/eachDayOfInterval";
+import { isSameMonth } from "date-fns/isSameMonth";
+import { isToday } from "date-fns/isToday";
+import { format } from "date-fns/format";
+import { addMonths } from "date-fns/addMonths";
+import { subMonths } from "date-fns/subMonths";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -130,7 +128,7 @@ export function AttendanceCalendar({
 
       {/* Calendar grid */}
       <div className="grid grid-cols-7 gap-px bg-border rounded-lg overflow-hidden border">
-        {days.map((day) => {
+        {days.map((day: Date) => {
           const entries = afkForDay(day);
           const inMonth = isSameMonth(day, month);
           const today = isToday(day);
