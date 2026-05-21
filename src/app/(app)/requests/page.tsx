@@ -90,6 +90,7 @@ export default async function RequestsPage() {
                                 member={member}
                                 isOwner={member.id === currentMember.id}
                                 isAdmin={currentMember.isAdmin}
+                                characters={member.id === currentMember.id ? memberCharacters : undefined}
                             />
                         ))}
                     </div>
