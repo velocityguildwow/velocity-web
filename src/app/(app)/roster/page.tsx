@@ -1,11 +1,14 @@
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, max, and, ne } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import {
     getDb,
     members,
     characters,
+    requests,
     authUsers,
+    getCurrentWeekStart,
+    formatWeekRange,
 } from "@ravxd/velocitydb";
 import { SyncRosterButton } from "@/components/sync-roster-button";
 import { RosterTable } from "@/components/roster-table";
@@ -66,6 +69,22 @@ export default async function RosterPage() {
         characters: charsByMember.get(m.id) ?? [],
     }));
 
+    // Upcoming reset: the latest week that has requests, falling back to current week
+    const [{ latestWeek }] = await db
+        .select({ latestWeek: max(requests.weekStart) })
+        .from(requests);
+    const upcomingWeek = latestWeek ?? getCurrentWeekStart();
+
+    const weekRequests = await db
+        .select({ characterId: requests.characterId })
+        .from(requests)
+        .where(
+            and(eq(requests.weekStart, upcomingWeek), ne(requests.status, "rejected"))
+        );
+    const requestedCharIds = new Set(
+        weekRequests.map((r) => r.characterId).filter(Boolean) as string[]
+    );
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -75,13 +94,19 @@ export default async function RosterPage() {
                         {rows.length} linked members
                     </p>
                 </div>
-                {currentMember.isAdmin && <SyncRosterButton />}
+                <SyncRosterButton />
+            </div>
+
+            <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Upcoming Reset:</span>
+                <span className="font-medium">{formatWeekRange(upcomingWeek)}</span>
             </div>
 
             <RosterTable
                 members={rosterMembers}
                 currentMemberId={currentMember.id}
                 isAdmin={currentMember.isAdmin}
+                requestedCharIds={requestedCharIds}
             />
         </div>
     );

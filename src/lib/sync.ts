@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, notInArray } from "drizzle-orm";
 import { getDb, members, characters, syncState } from "@ravxd/velocitydb";
 import { fetchRoster } from "./wowutils";
 import { fetchEquippedIlvl } from "./blizzard";
@@ -102,6 +102,18 @@ export async function syncRoster(triggeredBy = "system"): Promise<{
             })
         );
     }
+
+    const returnedCharacterIds = roster.flatMap((m) =>
+        m.characters.map((c) => c.playerId)
+    );
+    await db.delete(characters).where(
+        returnedCharacterIds.length > 0
+            ? and(
+                  isNotNull(characters.wowutilsCharacterId),
+                  notInArray(characters.wowutilsCharacterId, returnedCharacterIds)
+              )
+            : isNotNull(characters.wowutilsCharacterId)
+    );
 
     await db
         .insert(syncState)

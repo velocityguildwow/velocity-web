@@ -8,22 +8,28 @@ import { toast } from "sonner";
 
 export function SyncRosterButton() {
   const router = useRouter();
+  const [isSyncing, setIsSyncing] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  const isLoading = isSyncing || isPending;
+
   async function handleSync() {
-    await toast.promise(
-      fetch("/api/sync", { method: "POST" }).then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Sync failed");
-        startTransition(() => router.refresh());
-        return data;
-      }),
-      {
-        loading: "Syncing roster…",
-        success: (data) => `Roster synced — ${data.memberCount} members`,
-        error: (err) => err.message ?? "Sync failed. Check your WoWUtils API key.",
-      }
-    );
+    setIsSyncing(true);
+    const toastId = toast.loading("Syncing roster…");
+    try {
+      const res = await fetch("/api/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Sync failed");
+      toast.success(`Roster synced — ${data.memberCount} members`, { id: toastId });
+      startTransition(() => router.refresh());
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Sync failed. Check your WoWUtils API key.",
+        { id: toastId }
+      );
+    } finally {
+      setIsSyncing(false);
+    }
   }
 
   return (
@@ -31,11 +37,11 @@ export function SyncRosterButton() {
       variant="outline"
       size="sm"
       onClick={handleSync}
-      disabled={isPending}
+      disabled={isLoading}
       className="gap-2 hover:cursor-pointer"
     >
-      <RefreshCw className={`h-3.5 w-3.5 ${isPending ? "animate-spin" : ""}`} />
-      {isPending ? "Syncing…" : "Sync Roster"}
+      <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+      {isLoading ? "Syncing…" : "Sync Roster"}
     </Button>
   );
 }

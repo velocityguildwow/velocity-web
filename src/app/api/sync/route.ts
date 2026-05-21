@@ -8,7 +8,7 @@ export async function GET() {
   return NextResponse.json(result);
 }
 
-// POST: force sync (called by admin "Refresh Roster" button)
+// POST: force sync (called by "Sync Roster" button)
 export async function POST() {
   const session = await auth();
   if (!session?.user) {

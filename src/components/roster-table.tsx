@@ -60,9 +60,10 @@ interface RosterTableProps {
     members: RosterMember[];
     currentMemberId: string;
     isAdmin: boolean;
+    requestedCharIds?: Set<string>;
 }
 
-export function RosterTable({ members: initial, currentMemberId, isAdmin }: RosterTableProps) {
+export function RosterTable({ members: initial, currentMemberId, isAdmin, requestedCharIds }: RosterTableProps) {
     const [charReady, setCharReady] = useState<Record<string, boolean>>(() => {
         const map: Record<string, boolean> = {};
         for (const m of initial) {
@@ -171,12 +172,15 @@ export function RosterTable({ members: initial, currentMemberId, isAdmin }: Rost
                                         chars.map((c) => {
                                             const color = CLASS_COLORS[c.class];
                                             const ready = charReady[c.id] ?? c.isReady ?? false;
-                                            console.log(c)
+                                            const isRequested = requestedCharIds?.has(c.id) ?? false;
                                             return (
                                                 <tr
                                                     key={c.id}
                                                     className="border-b border-border/40 last:border-b-0 transition-colors"
-                                                    style={color ? { backgroundColor: `${color}18` } : undefined}
+                                                    style={{
+                                                        ...(color ? { backgroundColor: `${color}18` } : {}),
+                                                        ...(isRequested ? { boxShadow: "inset 0 0 0 1.5px rgba(234,179,8,0.65)" } : {}),
+                                                    }}
                                                 >
                                                     <td className="px-8 py-2 font-medium">
                                                         {c.name}
