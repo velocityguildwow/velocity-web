@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { LinkIcon, PencilIcon } from "lucide-react";
 
 export interface AdminMember {
@@ -34,6 +35,7 @@ export interface AdminMember {
     wowutilsRank: string | null;
     linkStatus: "unlinked" | "linked" | "pending";
     userId: string | null;
+    isAdmin: boolean;
     linkedUserName: string | null;
     linkedUserImage: string | null;
 }
@@ -48,6 +50,7 @@ export interface DiscordUser {
 interface AdminMembersTableProps {
     members: AdminMember[];
     discordUsers: DiscordUser[];
+    currentMemberId: string;
 }
 
 function LinkDialog({
@@ -194,8 +197,22 @@ function BattletagDialog({
     );
 }
 
-export function AdminMembersTable({ members, discordUsers }: AdminMembersTableProps) {
+export function AdminMembersTable({ members, discordUsers, currentMemberId }: AdminMembersTableProps) {
     const router = useRouter();
+
+    async function handleAdminToggle(memberId: string, isAdmin: boolean) {
+        const res = await fetch(`/api/admin/members/${memberId}/admin-status`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isAdmin }),
+        });
+        if (!res.ok) {
+            const { error } = await res.json().catch(() => ({ error: "Failed" }));
+            alert(error ?? "Failed to update admin status");
+            return;
+        }
+        router.refresh();
+    }
 
     async function handleLink(memberId: string, userId: string | null) {
         const res = await fetch(`/api/admin/members/${memberId}/link`, {
@@ -236,6 +253,9 @@ export function AdminMembersTable({ members, discordUsers }: AdminMembersTablePr
                         </th>
                         <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">
                             Linked user
+                        </th>
+                        <th className="text-center px-4 py-2.5 font-medium text-muted-foreground w-16">
+                            Admin
                         </th>
                         <th className="text-right px-4 py-2.5 font-medium text-muted-foreground">
                             Actions
@@ -298,6 +318,17 @@ export function AdminMembersTable({ members, discordUsers }: AdminMembersTablePr
                                 ) : (
                                     <span className="text-muted-foreground text-sm">—</span>
                                 )}
+                            </td>
+
+                            <td className="px-4 py-2.5 text-center">
+                                <Checkbox
+                                    checked={m.isAdmin}
+                                    disabled={m.id === currentMemberId}
+                                    onCheckedChange={(checked: boolean) =>
+                                        handleAdminToggle(m.id, checked)
+                                    }
+                                    aria-label={`Admin status for ${m.displayName}`}
+                                />
                             </td>
 
                             <td className="px-4 py-2.5 text-right">

@@ -13,7 +13,7 @@ export default async function AdminPage() {
     const db = getDb();
 
     const [currentMember] = await db
-        .select({ isAdmin: members.isAdmin })
+        .select({ id: members.id, isAdmin: members.isAdmin })
         .from(members)
         .where(eq(members.discordId, session.user.id))
         .limit(1);
@@ -31,6 +31,7 @@ export default async function AdminPage() {
             wowutilsRank: members.wowutilsRank,
             linkStatus: members.linkStatus,
             userId: members.userId,
+            isAdmin: members.isAdmin,
             linkedUserName: authUsers.name,
             linkedUserImage: authUsers.image,
         })
@@ -58,7 +59,11 @@ export default async function AdminPage() {
                     {allMembers.length} members
                 </p>
             </div>
-            <AdminMembersTable members={allMembers} discordUsers={discordUsers} />
+            <AdminMembersTable
+                members={allMembers}
+                discordUsers={discordUsers}
+                currentMemberId={currentMember.id}
+            />
         </div>
     );
 }
