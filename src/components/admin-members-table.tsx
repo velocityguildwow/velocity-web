@@ -23,7 +23,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { LinkIcon, PencilIcon } from "lucide-react";
+import { LinkIcon, PencilIcon, Trash2Icon } from "lucide-react";
 
 export interface AdminMember {
     id: string;
@@ -197,6 +197,60 @@ function BattletagDialog({
     );
 }
 
+function DeleteDialog({
+    member,
+    onConfirm,
+}: {
+    member: AdminMember;
+    onConfirm: () => Promise<void>;
+}) {
+    const [open, setOpen] = useState(false);
+    const [pending, startTransition] = useTransition();
+
+    function handleConfirm() {
+        startTransition(async () => {
+            await onConfirm();
+            setOpen(false);
+        });
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger
+                render={
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 gap-1.5 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                    />
+                }
+            >
+                <Trash2Icon className="size-3" />
+                Delete
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Delete member — {member.displayName}</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">
+                    This will permanently delete{" "}
+                    <span className="font-medium text-foreground">{member.displayName}</span> and
+                    all associated characters, requests, and raid assignments. This cannot be
+                    undone.
+                </p>
+                <DialogFooter>
+                    <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={pending}>
+                        Cancel
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={handleConfirm} disabled={pending}>
+                        {pending ? "Deleting…" : "Delete"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 export function AdminMembersTable({ members, discordUsers, currentMemberId }: AdminMembersTableProps) {
     const router = useRouter();
 
@@ -231,6 +285,16 @@ export function AdminMembersTable({ members, discordUsers, currentMemberId }: Ad
             body: JSON.stringify({ battletag }),
         });
         if (!res.ok) throw new Error("Failed to update battletag");
+        router.refresh();
+    }
+
+    async function handleDelete(memberId: string) {
+        const res = await fetch(`/api/admin/members/${memberId}`, { method: "DELETE" });
+        if (!res.ok) {
+            const { error } = await res.json().catch(() => ({ error: "Failed" }));
+            alert(error ?? "Failed to delete member");
+            return;
+        }
         router.refresh();
     }
 
@@ -338,6 +402,12 @@ export function AdminMembersTable({ members, discordUsers, currentMemberId }: Ad
                                         discordUsers={discordUsers}
                                         onSave={(userId) => handleLink(m.id, userId)}
                                     />
+                                    {m.id !== currentMemberId && (
+                                        <DeleteDialog
+                                            member={m}
+                                            onConfirm={() => handleDelete(m.id)}
+                                        />
+                                    )}
                                 </div>
                             </td>
                         </tr>

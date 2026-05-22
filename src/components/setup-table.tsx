@@ -13,6 +13,13 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { BOSSES } from "@/data/bosses";
+import { RAID_BUFFS } from "@/data/raid-buffs";
+import {
+    Tooltip,
+    TooltipProvider,
+    TooltipTrigger,
+    TooltipContent,
+} from "@/components/ui/tooltip";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -361,6 +368,14 @@ export function SetupTable({
         return map;
     }, [members]);
 
+    const charIdToClass = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const m of members) {
+            for (const c of m.characters) map.set(c.id, c.class);
+        }
+        return map;
+    }, [members]);
+
     // Per-boss: characterIds already assigned to that boss across ALL setups in this reset.
     // A character cannot appear on the same boss in more than one tab.
     const usedCharsByBoss = useMemo(() => {
@@ -379,6 +394,20 @@ export function SetupTable({
     }, [assignments]);
 
     const activeAssignments = activeTabId ? (assignments[activeTabId] ?? {}) : {};
+
+    const bossBuffMap = useMemo(() => {
+        const result: Record<string, Array<{ name: string; count: number }>> = {};
+        for (const boss of BOSSES) {
+            const charIds = Object.values(activeAssignments)
+                .map((ma) => ma[boss.slug])
+                .filter((id): id is string => !!id);
+            result[boss.slug] = RAID_BUFFS.map((buff) => ({
+                name: buff.name,
+                count: charIds.filter((id) => charIdToClass.get(id) === buff.class).length,
+            }));
+        }
+        return result;
+    }, [activeAssignments, charIdToClass]);
 
     // How many boss slots each character fills in the active tab
     const charBossCountMap = useMemo(() => {
@@ -619,16 +648,48 @@ export function SetupTable({
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm border-collapse">
                                 <thead>
-                                    <tr className="bg-muted/50 border-b border-border">
+                                    <TooltipProvider delay={200}>
+                                    <tr className="border-b border-border">
                                         <th className="text-left px-3 py-2.5 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-10 min-w-[150px]">
                                             Member
                                         </th>
-                                        {BOSSES.map((boss) => (
-                                            <th key={boss.slug} className="text-center px-2 py-2.5 font-medium text-muted-foreground whitespace-nowrap min-w-[120px] border-l border-border/40">
-                                                {boss.name}
-                                            </th>
-                                        ))}
+                                        {BOSSES.map((boss) => {
+                                            const buffList = bossBuffMap[boss.slug] ?? [];
+                                            const allCovered = buffList.length > 0 && buffList.every((b) => b.count > 0);
+                                            const anyMissing = buffList.some((b) => b.count === 0);
+                                            const bgClass = allCovered
+                                                ? "bg-green-500/20"
+                                                : anyMissing
+                                                ? "bg-yellow-500/20"
+                                                : "bg-muted/50";
+                                            return (
+                                                <th key={boss.slug} className={`text-center px-2 py-2.5 font-medium text-muted-foreground whitespace-nowrap min-w-[120px] border-l border-border/40 transition-colors ${bgClass}`}>
+                                                    <Tooltip>
+                                                        <TooltipTrigger
+                                                            render={<span />}
+                                                            className="block w-full cursor-default"
+                                                        >
+                                                            {boss.name}
+                                                        </TooltipTrigger>
+                                                        <TooltipContent className="w-56 px-3 py-2.5 text-xs">
+                                                            <div className="font-semibold text-sm mb-2">Raid Buffs</div>
+                                                            <div className="space-y-1">
+                                                                {buffList.map(({ name, count }) => (
+                                                                    <div key={name} className="flex items-center justify-between gap-3">
+                                                                        <span className="text-muted-foreground">{name}</span>
+                                                                        <span className={`font-semibold tabular-nums ${count > 0 ? "text-green-400" : "text-red-400"}`}>
+                                                                            {count}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                                </th>
+                                            );
+                                        })}
                                     </tr>
+                                    </TooltipProvider>
                                 </thead>
                                 <tbody>
                                     {/* Tanks */}
