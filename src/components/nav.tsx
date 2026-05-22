@@ -25,6 +25,7 @@ const links = [
   { href: "/requests", label: "Requests" },
   { href: "/calendar", label: "Calendar" },
   { href: "/roster", label: "Roster" },
+  { href: "/setup", label: "Setup" },
 ];
 
 export function Nav({ user }: NavProps) {
