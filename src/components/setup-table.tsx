@@ -140,6 +140,13 @@ function rankPriority(rank: string | null) {
     return RANK_ORDER[rank] ?? 5;
 }
 
+function bossCountColor(count: number): string {
+    if (count < 2) return "text-red-400";
+    if (count < 4) return "text-orange-400";
+    if (count < 6) return "text-yellow-400";
+    return "text-green-400";
+}
+
 // ─── Assignments state: [setupId][memberId][bossSlug] ─────────────────────────
 
 type AssignmentMap = Record<string, Record<string, Record<string, string | null>>>;
@@ -193,8 +200,10 @@ function AssignmentCell({
                     {char.name}
                     {char.isReady && <span className="ml-1 text-green-400">•</span>}
                 </span>
-                {bossCount > 1 && (
-                    <span className="text-[10px] text-muted-foreground/60 tabular-nums">×{bossCount}</span>
+                {bossCount > 0 && (
+                    <span className={`text-xs font-semibold tabular-nums ${bossCountColor(bossCount)}`}>
+                        ({bossCount})
+                    </span>
                 )}
             </div>
         );
@@ -204,64 +213,66 @@ function AssignmentCell({
     const triggerColor = selectedChar ? CLASS_COLORS[selectedChar.class] : undefined;
 
     return (
-        <div className="flex items-center gap-1">
-            <Select
-                value={currentValue ?? ""}
-                onValueChange={(val) => onChange(setupId, memberId, bossSlug, val || null)}
+        <Select
+            value={currentValue ?? ""}
+            onValueChange={(val) => onChange(setupId, memberId, bossSlug, val || null)}
+        >
+            <SelectTrigger
+                size="sm"
+                className="h-7 text-xs w-full border-border/50"
+                style={triggerColor ? { backgroundColor: `${triggerColor}28` } : undefined}
             >
-                <SelectTrigger
-                    size="sm"
-                    className="h-7 text-xs w-full border-border/50"
-                    style={triggerColor ? { backgroundColor: `${triggerColor}28` } : undefined}
-                >
-                    <SelectValue placeholder="—">
-                        {(val: string) => {
-                            if (!val) return null;
-                            const char = characters.find((c) => c.id === val);
-                            if (!char) return null;
-                            const color = CLASS_COLORS[char.class];
-                            return (
-                                <span style={color ? { color } : undefined}>
-                                    {char.name}
-                                </span>
-                            );
-                        }}
-                    </SelectValue>
-                </SelectTrigger>
-                <SelectContent align="start">
-                    <SelectItem value="" label="—">
-                        <span className="text-muted-foreground">— Unassigned</span>
-                    </SelectItem>
-                    {characters.map((char) => {
-                        const inUse = usedCharIds.has(char.id) && char.id !== currentValue;
-                        const isRequested = requestedCharIds.has(char.id);
+                <SelectValue placeholder="—">
+                    {(val: string) => {
+                        if (!val) return null;
+                        const char = characters.find((c) => c.id === val);
+                        if (!char) return null;
                         const color = CLASS_COLORS[char.class];
                         return (
-                            <SelectItem
-                                key={char.id}
-                                value={char.id}
-                                label={char.name}
-                                disabled={inUse}
-                                className={isRequested ? "bg-yellow-500/15 focus:bg-yellow-500/25" : undefined}
-                            >
-                                <span className="truncate" style={color && !inUse ? { color } : undefined}>
+                            <span className="flex items-center gap-1.5 min-w-0">
+                                <span className="truncate" style={color ? { color } : undefined}>
                                     {char.name}
                                 </span>
-                                {char.isReady && !inUse && (
-                                    <span className="text-green-400 text-[10px]">✓</span>
+                                {bossCount > 0 && (
+                                    <span className={`shrink-0 text-xs font-semibold tabular-nums ${bossCountColor(bossCount)}`}>
+                                        ({bossCount})
+                                    </span>
                                 )}
-                                {inUse && (
-                                    <span className="text-muted-foreground/50 text-[10px]">(in use)</span>
-                                )}
-                            </SelectItem>
+                            </span>
                         );
-                    })}
-                </SelectContent>
-            </Select>
-            {currentValue && bossCount > 1 && (
-                <span className="text-[10px] text-muted-foreground/60 tabular-nums shrink-0">×{bossCount}</span>
-            )}
-        </div>
+                    }}
+                </SelectValue>
+            </SelectTrigger>
+            <SelectContent align="start">
+                <SelectItem value="" label="—">
+                    <span className="text-muted-foreground">— Unassigned</span>
+                </SelectItem>
+                {characters.map((char) => {
+                    const inUse = usedCharIds.has(char.id) && char.id !== currentValue;
+                    const isRequested = requestedCharIds.has(char.id);
+                    const color = CLASS_COLORS[char.class];
+                    return (
+                        <SelectItem
+                            key={char.id}
+                            value={char.id}
+                            label={char.name}
+                            disabled={inUse}
+                            className={isRequested ? "bg-yellow-500/15 focus:bg-yellow-500/25" : undefined}
+                        >
+                            <span className="truncate" style={color && !inUse ? { color } : undefined}>
+                                {char.name}
+                            </span>
+                            {char.isReady && !inUse && (
+                                <span className="text-green-400 text-[10px]">✓</span>
+                            )}
+                            {inUse && (
+                                <span className="text-muted-foreground/50 text-[10px]">(in use)</span>
+                            )}
+                        </SelectItem>
+                    );
+                })}
+            </SelectContent>
+        </Select>
     );
 }
 
