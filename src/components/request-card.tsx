@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn, classColor } from "@/lib/utils";
 
 interface Character {
   id: string;
@@ -190,7 +190,7 @@ export function RequestCard({ request: initial, member, isOwner, isAdmin, charac
       </CardHeader>
 
       <CardContent className="px-4 pb-4 space-y-1">
-        <p className="text-sm font-medium">{characterName}</p>
+        <p className="text-sm font-medium" style={{ color: classColor(classSpec) }}>{characterName}</p>
 
         {isEditing ? (
           <div className="space-y-2 pt-1">
@@ -201,14 +201,14 @@ export function RequestCard({ request: initial, member, isOwner, isAdmin, charac
                     {editCharacterId === "__custom__"
                       ? "Other (enter manually)"
                       : editCharacterId
-                      ? (() => { const c = characters.find((ch) => ch.id === editCharacterId); return c ? `${c.name} — ${c.spec} ${c.class}` : "Pick a character…"; })()
+                      ? (() => { const c = characters.find((ch) => ch.id === editCharacterId); return c ? <span style={{ color: classColor(c.class) }}>{c.name} — {c.spec} {c.class}</span> : "Pick a character…"; })()
                       : "Pick a character…"}
                   </span>
                 </SelectTrigger>
                 <SelectContent>
                   {characters.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.name} — {c.spec} {c.class}
+                      <span style={{ color: classColor(c.class) }}>{c.name} — {c.spec} {c.class}</span>
                     </SelectItem>
                   ))}
                   <SelectItem value="__custom__">Other (enter manually)</SelectItem>
@@ -263,7 +263,7 @@ export function RequestCard({ request: initial, member, isOwner, isAdmin, charac
           </div>
         ) : (
           <>
-            <p className="text-xs text-muted-foreground">{classSpec}</p>
+            <p className="text-xs" style={{ color: classColor(classSpec) ?? "var(--muted-foreground)" }}>{classSpec}</p>
             {notes && (
               <p className="text-xs text-muted-foreground pt-1 border-t mt-2">
                 {notes}

@@ -55,7 +55,7 @@ export default async function RequestsPage() {
                 <div>
                     <h1 className="text-2xl font-bold">Requests</h1>
                     <p className="text-muted-foreground text-sm mt-1">
-                        What raiders want to play this week
+                        What raiders want to play next week
                     </p>
                 </div>
                 <NewRequestDialog

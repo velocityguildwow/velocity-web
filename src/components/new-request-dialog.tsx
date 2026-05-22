@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { classColor } from "@/lib/utils";
 
 interface Character {
   id: string;
@@ -92,13 +93,13 @@ export function NewRequestDialog({ memberId, characters }: NewRequestDialogProps
                     ? "Pick a character…"
                     : selectedCharId === "__custom__"
                     ? "Other (enter manually)"
-                    : `${selectedChar?.name} — ${selectedChar?.spec} ${selectedChar?.class}`}
+                    : <span style={{ color: classColor(selectedChar?.class ?? "") }}>{selectedChar?.name} — {selectedChar?.spec} {selectedChar?.class}</span>}
                 </span>
               </SelectTrigger>
               <SelectContent>
                 {characters.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.name} — {c.spec} {c.class}
+                    <span style={{ color: classColor(c.class) }}>{c.name} — {c.spec} {c.class}</span>
                   </SelectItem>
                 ))}
                 <SelectItem value="__custom__">Other (enter manually)</SelectItem>
