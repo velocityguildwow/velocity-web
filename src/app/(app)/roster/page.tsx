@@ -1,4 +1,4 @@
-import { eq, asc, max, and, ne } from "drizzle-orm";
+import { eq, asc, max, and, ne, desc } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import {
@@ -7,6 +7,7 @@ import {
     characters,
     requests,
     authUsers,
+    syncState,
     getCurrentWeekStart,
     formatWeekRange,
 } from "@ravxd/velocitydb";
@@ -85,6 +86,12 @@ export default async function RosterPage() {
         weekRequests.map((r) => r.characterId).filter(Boolean) as string[]
     );
 
+    const [lastSync] = await db
+        .select({ lastSyncedAt: syncState.lastSyncedAt, syncedBy: syncState.syncedBy })
+        .from(syncState)
+        .orderBy(desc(syncState.lastSyncedAt))
+        .limit(1);
+
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
@@ -94,7 +101,7 @@ export default async function RosterPage() {
                         {rows.length} linked members
                     </p>
                 </div>
-                <SyncRosterButton />
+                <SyncRosterButton lastSyncedAt={lastSync?.lastSyncedAt?.toISOString() ?? null} />
             </div>
 
             <div className="flex items-center gap-2 text-sm">

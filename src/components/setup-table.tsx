@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect, useMemo } from "react";
+import React, { useState, useTransition, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Plus, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -31,6 +31,7 @@ export interface SetupMember {
     discordUsername: string;
     discordImage: string | null;
     wowutilsRank: string | null;
+    wowutilsMainRole: string | null;
     characters: SetupCharacter[];
 }
 
@@ -53,6 +54,8 @@ interface SetupTableProps {
     isAdmin: boolean;
     members: SetupMember[];
     setups: SetupData[];
+    requestedCharIds: string[];
+    absentMemberIds: string[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -83,12 +86,61 @@ const RANK_ORDER: Record<string, number> = {
     "Trial":        4,
 };
 
+const MAX_PER_BOSS = 20;
+
+// ─── Role classification ──────────────────────────────────────────────────────
+
+type PlayerRole = "tank" | "healer" | "melee" | "ranged" | "unknown";
+
+const TANK_SPECS: Record<string, string[]> = {
+    "Warrior":      ["Protection"],
+    "Paladin":      ["Protection"],
+    "Death Knight": ["Blood"],
+    "Monk":         ["Brewmaster"],
+    "Druid":        ["Guardian"],
+    "Demon Hunter": ["Vengeance"],
+};
+
+const HEALER_SPECS: Record<string, string[]> = {
+    "Paladin":  ["Holy"],
+    "Priest":   ["Holy", "Discipline"],
+    "Shaman":   ["Restoration"],
+    "Druid":    ["Restoration"],
+    "Monk":     ["Mistweaver"],
+    "Evoker":   ["Preservation"],
+};
+
+const MELEE_SPECS: Record<string, string[]> = {
+    "Warrior":      ["Arms", "Fury"],
+    "Rogue":        ["Assassination", "Outlaw", "Subtlety"],
+    "Death Knight": ["Unholy", "Frost"],
+    "Demon Hunter": ["Havoc"],
+    "Monk":         ["Windwalker"],
+    "Paladin":      ["Retribution"],
+    "Shaman":       ["Enhancement"],
+    "Druid":        ["Feral"],
+};
+
+function classifyRole(member: SetupMember): PlayerRole {
+    const roleHint = member.wowutilsMainRole?.toLowerCase() ?? "";
+    if (roleHint.includes("tank")) return "tank";
+    if (roleHint.includes("heal")) return "healer";
+
+    const mainChar = member.characters.find((c) => c.isMain) ?? member.characters[0];
+    if (!mainChar) return "unknown";
+
+    if (TANK_SPECS[mainChar.class]?.includes(mainChar.spec)) return "tank";
+    if (HEALER_SPECS[mainChar.class]?.includes(mainChar.spec)) return "healer";
+    if (MELEE_SPECS[mainChar.class]?.includes(mainChar.spec)) return "melee";
+    return "ranged";
+}
+
 function rankPriority(rank: string | null) {
     if (!rank) return 99;
     return RANK_ORDER[rank] ?? 5;
 }
 
-// ─── Assignments state shape: assignments[setupId][memberId][bossSlug] ────────
+// ─── Assignments state: [setupId][memberId][bossSlug] ─────────────────────────
 
 type AssignmentMap = Record<string, Record<string, Record<string, string | null>>>;
 
@@ -113,6 +165,8 @@ function AssignmentCell({
     value,
     characters,
     usedCharIds,
+    requestedCharIds,
+    bossCount,
     isAdmin,
     onChange,
 }: {
@@ -122,6 +176,8 @@ function AssignmentCell({
     value: string | null | undefined;
     characters: SetupCharacter[];
     usedCharIds: Set<string>;
+    requestedCharIds: Set<string>;
+    bossCount: number;
     isAdmin: boolean;
     onChange: (setupId: string, memberId: string, bossSlug: string, charId: string | null) => void;
 }) {
@@ -129,55 +185,83 @@ function AssignmentCell({
 
     if (!isAdmin) {
         const char = characters.find((c) => c.id === currentValue);
-        if (!char) {
-            return <span className="text-xs text-muted-foreground px-1">—</span>;
-        }
+        if (!char) return <span className="text-xs text-muted-foreground">—</span>;
         const color = CLASS_COLORS[char.class];
         return (
-            <span className="text-xs font-medium px-1 truncate max-w-[120px]" style={color ? { color } : undefined}>
-                {char.name}
-                {char.isReady && <span className="ml-1 text-green-400">•</span>}
-            </span>
+            <div className="flex items-center gap-1">
+                <span className="text-xs font-medium" style={color ? { color } : undefined}>
+                    {char.name}
+                    {char.isReady && <span className="ml-1 text-green-400">•</span>}
+                </span>
+                {bossCount > 1 && (
+                    <span className="text-[10px] text-muted-foreground/60 tabular-nums">×{bossCount}</span>
+                )}
+            </div>
         );
     }
 
+    const selectedChar = characters.find((c) => c.id === currentValue);
+    const triggerColor = selectedChar ? CLASS_COLORS[selectedChar.class] : undefined;
+
     return (
-        <Select
-            value={currentValue ?? ""}
-            onValueChange={(val) => onChange(setupId, memberId, bossSlug, val || null)}
-        >
-            <SelectTrigger
-                size="sm"
-                className="h-7 text-xs min-w-[110px] max-w-[140px] border-border/50 bg-background/50"
+        <div className="flex items-center gap-1">
+            <Select
+                value={currentValue ?? ""}
+                onValueChange={(val) => onChange(setupId, memberId, bossSlug, val || null)}
             >
-                <SelectValue placeholder="—" />
-            </SelectTrigger>
-            <SelectContent align="start">
-                <SelectItem value="">
-                    <span className="text-muted-foreground">— Unassigned</span>
-                </SelectItem>
-                {characters.map((char) => {
-                    const inUse = usedCharIds.has(char.id) && char.id !== currentValue;
-                    const color = CLASS_COLORS[char.class];
-                    return (
-                        <SelectItem key={char.id} value={char.id} disabled={inUse}>
-                            <span
-                                className="truncate"
-                                style={color && !inUse ? { color } : undefined}
+                <SelectTrigger
+                    size="sm"
+                    className="h-7 text-xs w-full border-border/50"
+                    style={triggerColor ? { backgroundColor: `${triggerColor}28` } : undefined}
+                >
+                    <SelectValue placeholder="—">
+                        {(val: string) => {
+                            if (!val) return null;
+                            const char = characters.find((c) => c.id === val);
+                            if (!char) return null;
+                            const color = CLASS_COLORS[char.class];
+                            return (
+                                <span style={color ? { color } : undefined}>
+                                    {char.name}
+                                </span>
+                            );
+                        }}
+                    </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="start">
+                    <SelectItem value="" label="—">
+                        <span className="text-muted-foreground">— Unassigned</span>
+                    </SelectItem>
+                    {characters.map((char) => {
+                        const inUse = usedCharIds.has(char.id) && char.id !== currentValue;
+                        const isRequested = requestedCharIds.has(char.id);
+                        const color = CLASS_COLORS[char.class];
+                        return (
+                            <SelectItem
+                                key={char.id}
+                                value={char.id}
+                                label={char.name}
+                                disabled={inUse}
+                                className={isRequested ? "bg-yellow-500/15 focus:bg-yellow-500/25" : undefined}
                             >
-                                {char.name}
-                            </span>
-                            {char.isReady && !inUse && (
-                                <span className="text-green-400 text-[10px]">✓</span>
-                            )}
-                            {inUse && (
-                                <span className="text-muted-foreground/50 text-[10px]"> (in use)</span>
-                            )}
-                        </SelectItem>
-                    );
-                })}
-            </SelectContent>
-        </Select>
+                                <span className="truncate" style={color && !inUse ? { color } : undefined}>
+                                    {char.name}
+                                </span>
+                                {char.isReady && !inUse && (
+                                    <span className="text-green-400 text-[10px]">✓</span>
+                                )}
+                                {inUse && (
+                                    <span className="text-muted-foreground/50 text-[10px]">(in use)</span>
+                                )}
+                            </SelectItem>
+                        );
+                    })}
+                </SelectContent>
+            </Select>
+            {currentValue && bossCount > 1 && (
+                <span className="text-[10px] text-muted-foreground/60 tabular-nums shrink-0">×{bossCount}</span>
+            )}
+        </div>
     );
 }
 
@@ -195,9 +279,7 @@ function RenameInput({
     const [value, setValue] = useState(initialValue);
     const inputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        inputRef.current?.select();
-    }, []);
+    useEffect(() => { inputRef.current?.select(); }, []);
 
     return (
         <input
@@ -225,75 +307,126 @@ export function SetupTable({
     isAdmin,
     members,
     setups: initialSetups,
+    requestedCharIds,
+    absentMemberIds,
 }: SetupTableProps) {
     const [setupList, setSetupList] = useState(initialSetups);
-    const [activeTabId, setActiveTabId] = useState<string | null>(
-        initialSetups[0]?.id ?? null
-    );
-    const [assignments, setAssignments] = useState<AssignmentMap>(
-        buildInitialAssignments(initialSetups)
-    );
+    const [activeTabId, setActiveTabId] = useState<string | null>(initialSetups[0]?.id ?? null);
+    const [assignments, setAssignments] = useState<AssignmentMap>(buildInitialAssignments(initialSetups));
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [, startTransition] = useTransition();
 
-    const sortedMembers = useMemo(
-        () =>
-            [...members].sort((a, b) => {
-                const rd = rankPriority(a.wowutilsRank) - rankPriority(b.wowutilsRank);
-                return rd !== 0 ? rd : a.displayName.localeCompare(b.displayName);
-            }),
-        [members]
-    );
+    const requestedSet = useMemo(() => new Set(requestedCharIds), [requestedCharIds]);
+    const absentSet = useMemo(() => new Set(absentMemberIds), [absentMemberIds]);
 
-    // All characterIds currently assigned across ALL setups in this reset
-    const usedCharIds = useMemo(() => {
-        const used = new Set<string>();
-        for (const setupAssignments of Object.values(assignments)) {
-            for (const memberAssignments of Object.values(setupAssignments)) {
-                for (const charId of Object.values(memberAssignments)) {
+    const sortedMembers = useMemo(() => {
+        const sorted = [...members].sort((a, b) => a.displayName.localeCompare(b.displayName));
+        const present = sorted.filter((m) => !absentSet.has(m.id));
+        const absent  = sorted.filter((m) =>  absentSet.has(m.id));
+
+        const tanks: SetupMember[] = [];
+        const healers: SetupMember[] = [];
+        const melee: SetupMember[] = [];
+        const ranged: SetupMember[] = [];
+        const unknown: SetupMember[] = [];
+
+        for (const m of present) {
+            const role = classifyRole(m);
+            if (role === "tank")    tanks.push(m);
+            else if (role === "healer") healers.push(m);
+            else if (role === "melee")  melee.push(m);
+            else if (role === "ranged") ranged.push(m);
+            else unknown.push(m);
+        }
+
+        return { tanks, healers, melee, ranged, unknown, absent };
+    }, [members, absentSet]);
+
+    const charIdToName = useMemo(() => {
+        const map = new Map<string, string>();
+        for (const m of members) {
+            for (const c of m.characters) map.set(c.id, c.name);
+        }
+        return map;
+    }, [members]);
+
+    // Per-boss: characterIds already assigned to that boss across ALL setups in this reset.
+    // A character cannot appear on the same boss in more than one tab.
+    const usedCharsByBoss = useMemo(() => {
+        const map = new Map<string, Set<string>>();
+        for (const boss of BOSSES) {
+            const used = new Set<string>();
+            for (const sa of Object.values(assignments)) {
+                for (const ma of Object.values(sa)) {
+                    const charId = ma[boss.slug];
                     if (charId) used.add(charId);
                 }
             }
+            map.set(boss.slug, used);
         }
-        return used;
+        return map;
     }, [assignments]);
 
-    function handleAssignmentChange(
-        setupId: string,
-        memberId: string,
-        bossSlug: string,
-        charId: string | null
-    ) {
-        const prev = assignments[setupId]?.[memberId]?.[bossSlug] ?? null;
+    const activeAssignments = activeTabId ? (assignments[activeTabId] ?? {}) : {};
 
+    // How many boss slots each character fills in the active tab
+    const charBossCountMap = useMemo(() => {
+        const map = new Map<string, number>();
+        for (const memberAssignments of Object.values(activeAssignments)) {
+            for (const charId of Object.values(memberAssignments)) {
+                if (charId) map.set(charId, (map.get(charId) ?? 0) + 1);
+            }
+        }
+        return map;
+    }, [activeAssignments]);
+
+    // Count assigned characters per boss column for the active tab
+    const bossCountMap = useMemo(() => {
+        const counts: Record<string, number> = {};
+        for (const boss of BOSSES) {
+            counts[boss.slug] = Object.values(activeAssignments).filter(
+                (ma) => !!ma[boss.slug]
+            ).length;
+        }
+        return counts;
+    }, [activeAssignments]);
+
+    // Boss-to-boss diff: for each consecutive pair, which chars were added/removed
+    const bossDiffs = useMemo(() => {
+        return BOSSES.slice(1).map((boss, i) => {
+            const prevBoss = BOSSES[i];
+            const prevChars = new Set(
+                Object.values(activeAssignments)
+                    .map((ma) => ma[prevBoss.slug])
+                    .filter((id): id is string => !!id)
+            );
+            const currChars = new Set(
+                Object.values(activeAssignments)
+                    .map((ma) => ma[boss.slug])
+                    .filter((id): id is string => !!id)
+            );
+            const removed = [...prevChars].filter((id) => !currChars.has(id));
+            const added = [...currChars].filter((id) => !prevChars.has(id));
+            return { boss, removed, added };
+        });
+    }, [activeAssignments]);
+
+    function handleAssignmentChange(setupId: string, memberId: string, bossSlug: string, charId: string | null) {
+        const prev = assignments[setupId]?.[memberId]?.[bossSlug] ?? null;
         setAssignments((cur) => ({
             ...cur,
-            [setupId]: {
-                ...cur[setupId],
-                [memberId]: {
-                    ...cur[setupId]?.[memberId],
-                    [bossSlug]: charId,
-                },
-            },
+            [setupId]: { ...cur[setupId], [memberId]: { ...cur[setupId]?.[memberId], [bossSlug]: charId } },
         }));
-
         startTransition(async () => {
             const res = await fetch(`/api/setup/${setupId}/assignments`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ memberId, bossSlug, characterId: charId }),
             });
-
             if (!res.ok) {
                 setAssignments((cur) => ({
                     ...cur,
-                    [setupId]: {
-                        ...cur[setupId],
-                        [memberId]: {
-                            ...cur[setupId]?.[memberId],
-                            [bossSlug]: prev,
-                        },
-                    },
+                    [setupId]: { ...cur[setupId], [memberId]: { ...cur[setupId]?.[memberId], [bossSlug]: prev } },
                 }));
                 const data = await res.json().catch(() => ({}));
                 toast.error(data.error ?? "Failed to save assignment");
@@ -308,12 +441,7 @@ export function SetupTable({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ weekStart }),
             });
-
-            if (!res.ok) {
-                toast.error("Failed to create setup");
-                return;
-            }
-
+            if (!res.ok) { toast.error("Failed to create setup"); return; }
             const newSetup = await res.json();
             setSetupList((prev) => [...prev, { id: newSetup.id, name: newSetup.name, assignments: [] }]);
             setAssignments((prev) => ({ ...prev, [newSetup.id]: {} }));
@@ -324,11 +452,7 @@ export function SetupTable({
     function handleRename(id: string, name: string) {
         setRenamingId(null);
         if (!name.trim()) return;
-
-        setSetupList((prev) =>
-            prev.map((s) => (s.id === id ? { ...s, name } : s))
-        );
-
+        setSetupList((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
         startTransition(async () => {
             const res = await fetch(`/api/setup/${id}`, {
                 method: "PATCH",
@@ -342,41 +466,76 @@ export function SetupTable({
     function handleDeleteSetup(id: string) {
         const idx = setupList.findIndex((s) => s.id === id);
         const next = setupList[idx - 1] ?? setupList[idx + 1] ?? null;
-
         setSetupList((prev) => prev.filter((s) => s.id !== id));
-        setAssignments((prev) => {
-            const copy = { ...prev };
-            delete copy[id];
-            return copy;
-        });
+        setAssignments((prev) => { const copy = { ...prev }; delete copy[id]; return copy; });
         if (activeTabId === id) setActiveTabId(next?.id ?? null);
-
         startTransition(async () => {
             const res = await fetch(`/api/setup/${id}`, { method: "DELETE" });
             if (!res.ok) toast.error("Failed to delete setup");
         });
     }
 
+    function renderMemberRow(member: SetupMember, i: number, isAbsent: boolean) {
+        const rowBg = i % 2 === 0 ? "bg-background" : "bg-muted/10";
+        const isOfficer = member.wowutilsRank === "Officer" || (RANK_ORDER[member.wowutilsRank ?? ""] ?? 99) === 0;
+        return (
+            <tr key={member.id} className={`border-b border-border/40 last:border-b-0 ${rowBg}`}>
+                {/* Member name cell */}
+                <td className={`px-3 py-1.5 sticky left-0 z-10 border-r border-border/30 ${rowBg}`}>
+                    <div className={`flex items-center gap-2 px-2 py-0.5 rounded ${isAbsent ? "bg-red-500/15" : ""} ${isOfficer ? "border-l-2 border-purple-500/70" : ""}`}>
+                        <Avatar className="h-5 w-5 shrink-0">
+                            <AvatarImage src={member.discordImage ?? undefined} />
+                            <AvatarFallback className="text-[9px]">
+                                {member.displayName.slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                        </Avatar>
+                        <span className={`text-sm font-medium truncate max-w-[110px] ${isAbsent ? "text-red-400" : "text-foreground"}`}>
+                            {member.displayName}
+                        </span>
+                    </div>
+                </td>
+
+                {/* Boss assignment cells */}
+                {BOSSES.map((boss) => {
+                    const charId = activeAssignments[member.id]?.[boss.slug] ?? null;
+                    const isRequested = !!charId && requestedSet.has(charId);
+                    const bossCount = charId ? (charBossCountMap.get(charId) ?? 1) : 0;
+                    return (
+                        <td
+                            key={boss.slug}
+                            className={`px-1.5 py-1 border-l border-border/40 ${isRequested ? "bg-yellow-500/15" : ""}`}
+                        >
+                            <AssignmentCell
+                                setupId={activeTabId!}
+                                memberId={member.id}
+                                bossSlug={boss.slug}
+                                value={charId}
+                                characters={member.characters}
+                                usedCharIds={usedCharsByBoss.get(boss.slug) ?? new Set()}
+                                requestedCharIds={requestedSet}
+                                bossCount={bossCount}
+                                isAdmin={isAdmin}
+                                onChange={handleAssignmentChange}
+                            />
+                        </td>
+                    );
+                })}
+            </tr>
+        );
+    }
+
     const activeSetup = setupList.find((s) => s.id === activeTabId);
-    const activeAssignments = activeTabId ? (assignments[activeTabId] ?? {}) : {};
+    const hasDiffs = bossDiffs.some((d) => d.removed.length > 0 || d.added.length > 0);
 
     return (
         <div className="space-y-4">
             {/* Week navigation */}
             <div className="flex items-center gap-3 text-sm">
-                <Link
-                    href={`/setup?week=${prevWeekStart}`}
-                    className="p-1 rounded hover:bg-muted transition-colors"
-                    aria-label="Previous week"
-                >
+                <Link href={`/setup?week=${prevWeekStart}`} className="p-1 rounded hover:bg-muted transition-colors" aria-label="Previous week">
                     <ChevronLeft className="h-4 w-4" />
                 </Link>
                 <span className="font-medium min-w-[160px] text-center">{weekLabel}</span>
-                <Link
-                    href={`/setup?week=${nextWeekStart}`}
-                    className="p-1 rounded hover:bg-muted transition-colors"
-                    aria-label="Next week"
-                >
+                <Link href={`/setup?week=${nextWeekStart}`} className="p-1 rounded hover:bg-muted transition-colors" aria-label="Next week">
                     <ChevronRight className="h-4 w-4" />
                 </Link>
             </div>
@@ -405,20 +564,14 @@ export function SetupTable({
                                 {isAdmin && (
                                     <>
                                         <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setRenamingId(setup.id);
-                                            }}
+                                            onClick={(e) => { e.stopPropagation(); setRenamingId(setup.id); }}
                                             className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-background"
                                             aria-label="Rename setup"
                                         >
                                             <Pencil className="h-3 w-3" />
                                         </button>
                                         <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeleteSetup(setup.id);
-                                            }}
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteSetup(setup.id); }}
                                             className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/20 hover:text-destructive"
                                             aria-label="Delete setup"
                                         >
@@ -430,7 +583,6 @@ export function SetupTable({
                         )}
                     </div>
                 ))}
-
                 {isAdmin && (
                     <button
                         onClick={handleCreateSetup}
@@ -443,7 +595,7 @@ export function SetupTable({
                 )}
             </div>
 
-            {/* Table */}
+            {/* Table + diff */}
             {!activeSetup ? (
                 <div className="rounded-lg border border-dashed border-border p-12 text-center text-muted-foreground text-sm">
                     {isAdmin
@@ -451,82 +603,166 @@ export function SetupTable({
                         : "No setups have been created for this week yet."}
                 </div>
             ) : (
-                <div className="rounded-lg border border-border overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm border-collapse">
-                            <thead>
-                                <tr className="bg-muted/50 border-b border-border">
-                                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-10 min-w-[160px]">
-                                        Member
-                                    </th>
-                                    {BOSSES.map((boss) => (
-                                        <th
-                                            key={boss.slug}
-                                            className="text-center px-3 py-2.5 font-medium text-muted-foreground whitespace-nowrap min-w-[130px]"
-                                        >
-                                            {boss.name}
+                <div className="space-y-4">
+                    <div className="rounded-lg border border-border overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm border-collapse">
+                                <thead>
+                                    <tr className="bg-muted/50 border-b border-border">
+                                        <th className="text-left px-3 py-2.5 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-10 min-w-[150px]">
+                                            Member
                                         </th>
-                                    ))}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {sortedMembers.map((member, i) => {
-                                    const rowBg = i % 2 === 0 ? "bg-background" : "bg-muted/10";
-                                    return (
-                                    <tr
-                                        key={member.id}
-                                        className={`border-b border-border/40 last:border-b-0 ${rowBg}`}
-                                    >
-                                        {/* Member cell */}
-                                        <td className={`px-4 py-2 sticky left-0 z-10 border-r border-border/30 ${rowBg}`}>
-                                            <div className="flex items-center gap-2">
-                                                <Avatar className="h-6 w-6 shrink-0">
-                                                    <AvatarImage src={member.discordImage ?? undefined} />
-                                                    <AvatarFallback className="text-[10px]">
-                                                        {member.displayName.slice(0, 2).toUpperCase()}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <span className="font-medium text-foreground truncate max-w-[100px]">
-                                                    {member.displayName}
-                                                </span>
-                                            </div>
-                                        </td>
-
-                                        {/* Boss assignment cells */}
                                         {BOSSES.map((boss) => (
-                                            <td key={boss.slug} className="px-2 py-1.5 text-center">
-                                                <AssignmentCell
-                                                    setupId={activeTabId!}
-                                                    memberId={member.id}
-                                                    bossSlug={boss.slug}
-                                                    value={activeAssignments[member.id]?.[boss.slug]}
-                                                    characters={member.characters}
-                                                    usedCharIds={usedCharIds}
-                                                    isAdmin={isAdmin}
-                                                    onChange={handleAssignmentChange}
-                                                />
-                                            </td>
+                                            <th key={boss.slug} className="text-center px-2 py-2.5 font-medium text-muted-foreground whitespace-nowrap min-w-[120px] border-l border-border/40">
+                                                {boss.name}
+                                            </th>
                                         ))}
                                     </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {/* Tanks */}
+                                    {sortedMembers.tanks.length > 0 && <>
+                                        <tr key="hdr-tanks">
+                                            <td colSpan={BOSSES.length + 1} className="px-3 py-1 text-xs font-bold text-foreground/80 bg-muted/30 uppercase tracking-wider">
+                                                Tanks
+                                            </td>
+                                        </tr>
+                                        {sortedMembers.tanks.map((m, i) => renderMemberRow(m, i, false))}
+                                    </>}
+
+                                    {/* Healers */}
+                                    {sortedMembers.healers.length > 0 && <>
+                                        <tr key="hdr-healers">
+                                            <td colSpan={BOSSES.length + 1} className={`px-3 py-1 text-xs font-bold text-foreground/80 bg-muted/30 uppercase tracking-wider ${sortedMembers.tanks.length > 0 ? "border-t-2 border-border/60" : ""}`}>
+                                                Healers
+                                            </td>
+                                        </tr>
+                                        {sortedMembers.healers.map((m, i) => renderMemberRow(m, i, false))}
+                                    </>}
+
+                                    {/* DPS super-header + Melee + Ranged */}
+                                    {(sortedMembers.melee.length > 0 || sortedMembers.ranged.length > 0) && <>
+                                        <tr key="hdr-dps">
+                                            <td colSpan={BOSSES.length + 1} className={`px-3 py-1 text-xs font-bold text-foreground/80 bg-muted/30 uppercase tracking-wider ${(sortedMembers.tanks.length > 0 || sortedMembers.healers.length > 0) ? "border-t-2 border-border/60" : ""}`}>
+                                                DPS
+                                            </td>
+                                        </tr>
+                                        {sortedMembers.melee.length > 0 && <>
+                                            <tr key="hdr-melee">
+                                                <td colSpan={BOSSES.length + 1} className="px-4 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/40 bg-muted/10">
+                                                    Melee
+                                                </td>
+                                            </tr>
+                                            {sortedMembers.melee.map((m, i) => renderMemberRow(m, i, false))}
+                                        </>}
+                                        {sortedMembers.ranged.length > 0 && <>
+                                            <tr key="hdr-ranged">
+                                                <td colSpan={BOSSES.length + 1} className={`px-4 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/40 bg-muted/10 ${sortedMembers.melee.length > 0 ? "border-t border-border/40" : ""}`}>
+                                                    Ranged
+                                                </td>
+                                            </tr>
+                                            {sortedMembers.ranged.map((m, i) => renderMemberRow(m, i, false))}
+                                        </>}
+                                    </>}
+
+                                    {/* Unknown / unclassified */}
+                                    {sortedMembers.unknown.length > 0 && <>
+                                        <tr key="hdr-other">
+                                            <td colSpan={BOSSES.length + 1} className="px-3 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/50 bg-muted/20 border-t-2 border-border/60">
+                                                Other
+                                            </td>
+                                        </tr>
+                                        {sortedMembers.unknown.map((m, i) => renderMemberRow(m, i, false))}
+                                    </>}
+
+                                    {/* Absent */}
+                                    {sortedMembers.absent.length > 0 && <>
+                                        <tr key="hdr-absent">
+                                            <td colSpan={BOSSES.length + 1} className="px-3 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-red-400/60 bg-red-500/5 border-t-2 border-red-500/30">
+                                                Absent this reset
+                                            </td>
+                                        </tr>
+                                        {sortedMembers.absent.map((m, i) => renderMemberRow(m, i, true))}
+                                    </>}
+                                </tbody>
+                                <tfoot>
+                                    {/* Count row */}
+                                    <tr className="border-t border-border bg-muted/30">
+                                        <td className="px-3 py-1.5 sticky left-0 bg-muted/30 text-xs font-medium text-muted-foreground">
+                                            Total
+                                        </td>
+                                        {BOSSES.map((boss) => {
+                                            const count = bossCountMap[boss.slug] ?? 0;
+                                            const over = count > MAX_PER_BOSS;
+                                            return (
+                                                <td key={boss.slug} className="px-2 py-1.5 text-center border-l border-border/40">
+                                                    <span className={`text-xs font-medium tabular-nums ${over ? "text-red-400" : "text-muted-foreground"}`}>
+                                                        {count} / {MAX_PER_BOSS}
+                                                    </span>
+                                                </td>
+                                            );
+                                        })}
+                                    </tr>
+
+                                    {/* Diff header */}
+                                    {hasDiffs && (
+                                        <tr className="border-t border-dashed border-border/60 bg-muted/10">
+                                            <td className="px-3 py-1.5 sticky left-0 bg-muted/10 text-xs font-medium text-muted-foreground whitespace-nowrap">
+                                                Changes
+                                            </td>
+                                            {BOSSES.map((boss, i) => {
+                                                if (i === 0) return <td key={boss.slug} className="px-2 py-1.5 text-xs text-muted-foreground/40 text-center border-l border-border/40">—</td>;
+                                                const diff = bossDiffs[i - 1];
+                                                const hasChanges = diff.removed.length > 0 || diff.added.length > 0;
+                                                if (!hasChanges) return <td key={boss.slug} className="px-2 py-1.5 text-xs text-muted-foreground/40 text-center border-l border-border/40">—</td>;
+                                                return (
+                                                    <td key={boss.slug} className="px-1 py-1.5 align-top border-l border-border/40">
+                                                        <div className="flex gap-0.5 text-[11px]">
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">Out</div>
+                                                                {diff.removed.map((id) => (
+                                                                    <div key={id} className="text-red-400 truncate leading-4">
+                                                                        {charIdToName.get(id) ?? "?"}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            <div className="w-px bg-border/40 mx-0.5 self-stretch" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide mb-0.5">In</div>
+                                                                {diff.added.map((id) => (
+                                                                    <div key={id} className="text-green-400 truncate leading-4">
+                                                                        {charIdToName.get(id) ?? "?"}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                );
+                                            })}
+                                        </tr>
+                                    )}
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1.5">
+                            <span className="inline-block w-3 h-3 rounded-sm bg-yellow-500/20 border border-yellow-500/30" />
+                            <span>Approved request</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <span className="inline-block w-3 h-3 rounded-sm bg-red-500/15 border border-red-500/20" />
+                            <span>Absent this reset</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <span className="text-green-400">✓</span>
+                            <span>Ready</span>
+                        </div>
                     </div>
                 </div>
             )}
-
-            {/* Legend */}
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                <div className="flex items-center gap-1">
-                    <span className="text-green-400">✓</span>
-                    <span>Ready</span>
-                </div>
-                <div className="flex items-center gap-1">
-                    <span className="opacity-50">(in use)</span>
-                    <span>Already assigned this reset</span>
-                </div>
-            </div>
         </div>
     );
 }

@@ -5,7 +5,7 @@
       "name": "web",
       "dependencies": {
         "@base-ui/react": "^1.5.0",
-        "@ravxd/velocitydb": "^0.1.8",
+        "@ravxd/velocitydb": "^0.1.9",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "date-fns": "^4.2.1",
@@ -275,7 +275,7 @@
 
     "@panva/hkdf": ["@panva/hkdf@1.2.1", "", {}, "sha512-6oclG6Y3PiDFcoyk8srjLfVKyMfVCKJ27JwNPViuXziFpmdz+MZnZN/aKY0JGXgYuO/VghU0jcOAZgWXZ1Dmrw=="],
 
-    "@ravxd/velocitydb": ["@ravxd/velocitydb@0.1.8", "", { "dependencies": { "date-fns": "^4.2.1" }, "peerDependencies": { "drizzle-orm": "^0.45.2", "postgres": "^3.4.0" } }, "sha512-sF7S0ItT8rO61+Y2FmYO3hBP2ZDbPTvCWEkHC05S2BigeeCSjBW8yj1mRobf3n6y0YfvhjIb1AZcYIxXGOVW3w=="],
+    "@ravxd/velocitydb": ["@ravxd/velocitydb@0.1.9", "", { "dependencies": { "date-fns": "^4.2.1" }, "peerDependencies": { "drizzle-orm": "^0.45.2", "postgres": "^3.4.0" } }, "sha512-uM8TYQA619klBoTFd40SwaAgQElwmPQ7lJTpOUWpj2XzD+JqooM7+yUr81t+2kHyPSXi+Rx2bSZ1+OP/I5YL7A=="],
 
     "@rtsao/scc": ["@rtsao/scc@1.1.0", "", {}, "sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g=="],
 

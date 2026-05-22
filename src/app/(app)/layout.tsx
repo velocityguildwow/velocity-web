@@ -45,7 +45,7 @@ export default async function AppLayout({
                     isAdmin: member.isAdmin,
                 }}
             />
-            <main className="relative max-w-6xl mx-auto px-4 py-8">{children}</main>
+            <main className="relative max-w-[1800px] mx-auto px-4 py-8">{children}</main>
         </div>
     );
 }

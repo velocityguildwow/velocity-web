@@ -34,7 +34,7 @@ export function Nav({ user }: NavProps) {
 
   return (
     <header className="border-b bg-background">
-      <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+      <div className="max-w-[1800px] mx-auto px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <Link href="/" className="font-bold text-lg tracking-tight">
             {"<velocity>"}

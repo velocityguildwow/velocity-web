@@ -1,4 +1,4 @@
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, and, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import {
@@ -7,6 +7,8 @@ import {
     characters,
     setups,
     setupAssignments,
+    requests,
+    afkEntries,
     authUsers,
     getCurrentWeekStart,
     formatWeekRange,
@@ -15,10 +17,14 @@ import { SetupTable } from "@/components/setup-table";
 
 export const dynamic = "force-dynamic";
 
-function getAdjacentWeek(weekStart: string, direction: 1 | -1): string {
-    const d = new Date(weekStart + "T00:00:00Z");
-    d.setUTCDate(d.getUTCDate() + direction * 7);
+function addDays(dateStr: string, days: number): string {
+    const d = new Date(dateStr + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + days);
     return d.toISOString().split("T")[0];
+}
+
+function getAdjacentWeek(weekStart: string, direction: 1 | -1): string {
+    return addDays(weekStart, direction * 7);
 }
 
 export default async function SetupPage({
@@ -48,6 +54,7 @@ export default async function SetupPage({
             displayName: members.displayName,
             discordUsername: members.discordUsername,
             wowutilsRank: members.wowutilsRank,
+            wowutilsMainRole: members.wowutilsMainRole,
             discordImage: authUsers.image,
         })
         .from(members)
@@ -76,6 +83,7 @@ export default async function SetupPage({
     const setupMembers = rows.map((m) => ({
         ...m,
         discordImage: m.discordImage ?? null,
+        wowutilsMainRole: m.wowutilsMainRole ?? null,
         characters: (charsByMember.get(m.id) ?? []).sort((a, b) =>
             a.isMain === b.isMain ? a.name.localeCompare(b.name) : a.isMain ? -1 : 1
         ),
@@ -109,6 +117,30 @@ export default async function SetupPage({
         assignments: assignmentsBySetup.get(s.id) ?? [],
     }));
 
+    // Approved requests for this reset week — these characters get a yellow highlight
+    const approvedRequests = await db
+        .select({ characterId: requests.characterId })
+        .from(requests)
+        .where(
+            and(
+                eq(requests.weekStart, weekStart),
+                eq(requests.status, "approved")
+            )
+        );
+    const requestedCharIds = approvedRequests
+        .map((r) => r.characterId)
+        .filter((id): id is string => id !== null);
+
+    // Raid days for this reset: last day (Tue = weekStart+6), Wed, Thu
+    const raidDays = [addDays(weekStart, 6), addDays(weekStart, 7), addDays(weekStart, 8)];
+
+    // Members AFK on any raid day — shown below a divider with red name
+    const afkRows = await db
+        .select({ memberId: afkEntries.memberId })
+        .from(afkEntries)
+        .where(inArray(afkEntries.afkDate, raidDays));
+    const absentMemberIds = [...new Set(afkRows.map((a) => a.memberId))];
+
     return (
         <div className="space-y-6">
             <div>
@@ -126,6 +158,8 @@ export default async function SetupPage({
                 isAdmin={currentMember.isAdmin}
                 members={setupMembers}
                 setups={setupData}
+                requestedCharIds={requestedCharIds}
+                absentMemberIds={absentMemberIds}
             />
         </div>
     );
