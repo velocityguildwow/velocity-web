@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members } from "@ravxd/velocitydb";
+import { members } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 
 async function requireAdmin() {
     const session = await auth();
     if (!session?.user?.id) return null;
-    const db = getDb();
     const [member] = await db
         .select({ isAdmin: members.isAdmin })
         .from(members)
@@ -29,7 +29,6 @@ export async function PATCH(
         return NextResponse.json({ error: "Invalid battletag" }, { status: 400 });
     }
 
-    const db = getDb();
     const result = await db
         .update(members)
         .set({ battletag: battletag.trim(), updatedAt: new Date() })

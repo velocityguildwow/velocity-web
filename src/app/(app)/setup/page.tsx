@@ -2,7 +2,6 @@ import { eq, asc, and, inArray } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import {
-    getDb,
     members,
     characters,
     setups,
@@ -13,6 +12,7 @@ import {
     getCurrentWeekStart,
     formatWeekRange,
 } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 import { SetupTable } from "@/components/setup-table";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +38,6 @@ export default async function SetupPage({
     const { week } = await searchParams;
     const weekStart = week ?? getCurrentWeekStart();
 
-    const db = getDb();
 
     const [currentMember] = await db
         .select({ id: members.id, isAdmin: members.isAdmin })

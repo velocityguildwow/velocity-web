@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { eq, asc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members, authUsers, authAccounts } from "@ravxd/velocitydb";
+import { members, authUsers, authAccounts } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 import { AdminMembersTable } from "@/components/admin-members-table";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,6 @@ export default async function AdminPage() {
     const session = await auth();
     if (!session?.user?.id) redirect("/login");
 
-    const db = getDb();
 
     const [currentMember] = await db
         .select({ id: members.id, isAdmin: members.isAdmin })

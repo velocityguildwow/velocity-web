@@ -3,14 +3,12 @@ import Discord from "next-auth/providers/discord";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { eq, and } from "drizzle-orm";
 import {
-  getDb,
   authUsers,
   authAccounts,
   authSessions,
   authVerificationTokens,
 } from "@ravxd/velocitydb";
-
-const db = getDb();
+import { db } from "@/lib/db";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -28,8 +26,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async session({ session, user }) {
       if (session.user) {
-        // Replace the internal Auth.js UUID with the Discord snowflake ID
-        // so session.user.id matches members.discordId and the bot's interaction.user.id
         const [account] = await db
           .select({ providerAccountId: authAccounts.providerAccountId })
           .from(authAccounts)

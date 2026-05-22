@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members } from "@ravxd/velocitydb";
+import { members } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 import { Nav } from "@/components/nav";
 import { syncRosterIfStale } from "@/lib/sync";
 
@@ -13,7 +14,6 @@ export default async function AppLayout({
     const session = await auth();
     if (!session?.user?.id) redirect("/login");
 
-    const db = getDb();
     const [member] = await db
         .select()
         .from(members)

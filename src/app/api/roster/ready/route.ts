@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members, characters } from "@ravxd/velocitydb";
+import { members, characters } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 
 export async function PATCH(req: NextRequest) {
     const session = await auth();
@@ -14,7 +15,6 @@ export async function PATCH(req: NextRequest) {
         return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    const db = getDb();
 
     const [currentMember] = await db
         .select({ id: members.id, isAdmin: members.isAdmin })

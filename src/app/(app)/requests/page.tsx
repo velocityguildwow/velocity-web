@@ -1,7 +1,8 @@
 import { desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getDb, members, requests, characters } from "@ravxd/velocitydb";
+import { members, requests, characters } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 import { formatWeekRange } from "@ravxd/velocitydb";
 import { Separator } from "@/components/ui/separator";
 import { RequestCard } from "@/components/request-card";
@@ -12,7 +13,6 @@ export const dynamic = "force-dynamic";
 export default async function RequestsPage() {
     const session = await auth();
     if (!session?.user?.id) redirect("/login");
-    const db = getDb();
 
     const rows = await db
         .select({

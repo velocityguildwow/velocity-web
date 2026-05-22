@@ -1,13 +1,13 @@
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members, afkEntries, authUsers } from "@ravxd/velocitydb";
+import { members, afkEntries, authUsers } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 import { AttendanceCalendar } from "@/components/attendance-calendar";
 
 export const dynamic = "force-dynamic";
 
 export default async function CalendarPage() {
     const session = await auth();
-    const db = getDb();
 
     const rows = await db
         .select({

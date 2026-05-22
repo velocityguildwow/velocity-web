@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members, setups } from "@ravxd/velocitydb";
+import { members, setups } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 
 async function requireAdmin(discordId: string) {
-    const db = getDb();
     const [member] = await db
         .select({ id: members.id, isAdmin: members.isAdmin })
         .from(members)
@@ -24,7 +24,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!name?.trim()) return NextResponse.json({ error: "Invalid name" }, { status: 400 });
 
     const { id } = await params;
-    const db = getDb();
 
     const [updated] = await db
         .update(setups)
@@ -45,7 +44,6 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
     const { id } = await params;
-    const db = getDb();
 
     await db.delete(setups).where(eq(setups.id, id));
 

@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and, ne } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members, authAccounts, authUsers } from "@ravxd/velocitydb";
+import { members, authAccounts, authUsers } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 
 async function requireAdmin() {
     const session = await auth();
     if (!session?.user?.id) return null;
-    const db = getDb();
     const [member] = await db
         .select({ isAdmin: members.isAdmin })
         .from(members)
@@ -26,7 +26,6 @@ export async function PATCH(
     const body = await req.json();
     const userId: string | null = body.userId ?? null;
 
-    const db = getDb();
 
     const [target] = await db
         .select()

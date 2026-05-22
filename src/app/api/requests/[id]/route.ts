@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members, requests } from "@ravxd/velocitydb";
+import { members, requests } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 
 // PUT: owner edits their request content (resets to pending)
 export async function PUT(
@@ -13,7 +14,6 @@ export async function PUT(
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const db = getDb();
     const [member] = await db
         .select()
         .from(members)
@@ -69,7 +69,6 @@ export async function PATCH(
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const db = getDb();
     const [member] = await db
         .select()
         .from(members)
@@ -104,7 +103,6 @@ export async function DELETE(
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const db = getDb();
     const [member] = await db
         .select()
         .from(members)

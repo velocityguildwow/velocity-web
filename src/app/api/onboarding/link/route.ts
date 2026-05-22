@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members, authAccounts } from "@ravxd/velocitydb";
+import { members, authAccounts } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 import { syncRosterIfStale } from "@/lib/sync";
 
 export async function POST(req: NextRequest) {
@@ -21,7 +22,6 @@ export async function POST(req: NextRequest) {
     }
 
     await syncRosterIfStale("onboarding");
-    const db = getDb();
 
     // session.user.id is the Discord snowflake — look up the authUsers UUID for the FK
     const [account] = await db

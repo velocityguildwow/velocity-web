@@ -2,7 +2,6 @@ import { eq, asc, max, and, ne, desc } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import {
-    getDb,
     members,
     characters,
     requests,
@@ -11,6 +10,7 @@ import {
     getCurrentWeekStart,
     formatWeekRange,
 } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 import { SyncRosterButton } from "@/components/sync-roster-button";
 import { RosterTable } from "@/components/roster-table";
 
@@ -20,7 +20,6 @@ export default async function RosterPage() {
     const session = await auth();
     if (!session?.user?.id) redirect("/login");
 
-    const db = getDb();
 
     const [currentMember] = await db
         .select({ id: members.id, isAdmin: members.isAdmin })

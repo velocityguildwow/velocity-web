@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq, asc } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members, setups, setupAssignments } from "@ravxd/velocitydb";
+import { members, setups, setupAssignments } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
     const session = await auth();
@@ -10,7 +11,6 @@ export async function GET(req: NextRequest) {
     const week = req.nextUrl.searchParams.get("week");
     if (!week) return NextResponse.json({ error: "Missing week" }, { status: 400 });
 
-    const db = getDb();
 
     const [member] = await db
         .select({ id: members.id })
@@ -43,7 +43,6 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const db = getDb();
 
     const [member] = await db
         .select({ id: members.id, isAdmin: members.isAdmin })

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members, setups, setupAssignments } from "@ravxd/velocitydb";
+import { members, setups, setupAssignments } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const session = await auth();
     if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const db = getDb();
 
     const [member] = await db
         .select({ id: members.id, isAdmin: members.isAdmin })

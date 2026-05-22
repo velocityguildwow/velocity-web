@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
-import { getDb, members } from "@ravxd/velocitydb";
+import { members } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 
 async function getCallerMember(discordId: string) {
-    const db = getDb();
     const [member] = await db
         .select({ id: members.id, isAdmin: members.isAdmin })
         .from(members)
@@ -29,7 +29,6 @@ export async function DELETE(
         return NextResponse.json({ error: "You cannot delete your own account" }, { status: 400 });
     }
 
-    const db = getDb();
     const result = await db
         .delete(members)
         .where(eq(members.id, memberId))

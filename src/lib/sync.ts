@@ -1,7 +1,8 @@
 "use server";
 
 import { and, eq, isNotNull, notInArray } from "drizzle-orm";
-import { getDb, members, characters, syncState } from "@ravxd/velocitydb";
+import { members, characters, syncState } from "@ravxd/velocitydb";
+import { db } from "@/lib/db";
 import { fetchRoster } from "./wowutils";
 import { fetchEquippedIlvl } from "./blizzard";
 
@@ -11,7 +12,6 @@ export async function syncRosterIfStale(triggeredBy = "system"): Promise<{
     synced: boolean;
     memberCount: number;
 }> {
-    const db = getDb();
 
     const [lastSync] = await db
         .select()
@@ -33,7 +33,6 @@ export async function syncRoster(triggeredBy = "system"): Promise<{
     synced: boolean;
     memberCount: number;
 }> {
-    const db = getDb();
     const roster = await fetchRoster();
 
     for (const wowMember of roster) {
