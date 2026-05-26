@@ -5,6 +5,16 @@ import Link from "next/link";
 import { ChevronLeft, ChevronRight, Plus, X, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import {
     Select,
     SelectContent,
@@ -333,6 +343,12 @@ export function SetupTable({
     const [assignments, setAssignments] = useState<AssignmentMap>(buildInitialAssignments(initialSetups));
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [, startTransition] = useTransition();
+    const [bossOrder, setBossOrder] = useState(BOSSES);
+    const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+    const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
+    const [draggedBossSlug, setDraggedBossSlug] = useState<string | null>(null);
+    const [dragOverBossSlug, setDragOverBossSlug] = useState<string | null>(null);
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
     const requestedSet = useMemo(() => new Set(requestedCharIds), [requestedCharIds]);
     const absentSet = useMemo(() => new Set(absentMemberIds), [absentMemberIds]);
@@ -433,8 +449,8 @@ export function SetupTable({
 
     // Boss-to-boss diff: for each consecutive pair, which chars were added/removed
     const bossDiffs = useMemo(() => {
-        return BOSSES.slice(1).map((boss, i) => {
-            const prevBoss = BOSSES[i];
+        return bossOrder.slice(1).map((boss, i) => {
+            const prevBoss = bossOrder[i];
             const prevChars = new Set(
                 Object.values(activeAssignments)
                     .map((ma) => ma[prevBoss.slug])
@@ -449,7 +465,7 @@ export function SetupTable({
             const added = [...currChars].filter((id) => !prevChars.has(id));
             return { boss, removed, added };
         });
-    }, [activeAssignments]);
+    }, [activeAssignments, bossOrder]);
 
     function handleAssignmentChange(setupId: string, memberId: string, bossSlug: string, charId: string | null) {
         const prev = assignments[setupId]?.[memberId]?.[bossSlug] ?? null;
@@ -515,6 +531,36 @@ export function SetupTable({
         });
     }
 
+    function handleTabDrop(e: React.DragEvent, targetId: string) {
+        e.preventDefault();
+        if (!draggedTabId || draggedTabId === targetId) { setDraggedTabId(null); setDragOverTabId(null); return; }
+        setSetupList((prev) => {
+            const list = [...prev];
+            const fromIdx = list.findIndex((s) => s.id === draggedTabId);
+            const toIdx = list.findIndex((s) => s.id === targetId);
+            const [item] = list.splice(fromIdx, 1);
+            list.splice(toIdx, 0, item);
+            return list;
+        });
+        setDraggedTabId(null);
+        setDragOverTabId(null);
+    }
+
+    function handleBossDrop(e: React.DragEvent, targetSlug: string) {
+        e.preventDefault();
+        if (!draggedBossSlug || draggedBossSlug === targetSlug) { setDraggedBossSlug(null); setDragOverBossSlug(null); return; }
+        setBossOrder((prev) => {
+            const list = [...prev];
+            const fromIdx = list.findIndex((b) => b.slug === draggedBossSlug);
+            const toIdx = list.findIndex((b) => b.slug === targetSlug);
+            const [item] = list.splice(fromIdx, 1);
+            list.splice(toIdx, 0, item);
+            return list;
+        });
+        setDraggedBossSlug(null);
+        setDragOverBossSlug(null);
+    }
+
     function renderMemberRow(member: SetupMember, i: number, isAbsent: boolean) {
         const rowBg = i % 2 === 0 ? "bg-background" : "bg-muted/10";
         const isOfficer = member.wowutilsRank === "Officer" || (RANK_ORDER[member.wowutilsRank ?? ""] ?? 99) === 0;
@@ -536,7 +582,7 @@ export function SetupTable({
                 </td>
 
                 {/* Boss assignment cells */}
-                {BOSSES.map((boss) => {
+                {bossOrder.map((boss) => {
                     const charId = activeAssignments[member.id]?.[boss.slug] ?? null;
                     const isRequested = !!charId && requestedSet.has(charId);
                     const bossCount = charId ? (charBossCountMap.get(charId) ?? 1) : 0;
@@ -585,12 +631,18 @@ export function SetupTable({
                 {setupList.map((setup) => (
                     <div
                         key={setup.id}
-                        className={`group flex items-center gap-1 px-3 py-1.5 rounded-md text-sm cursor-pointer transition-colors border ${
+                        draggable={isAdmin}
+                        className={`group flex items-center gap-1 px-3 py-1.5 rounded-md text-sm cursor-pointer transition-colors border select-none ${
                             activeTabId === setup.id
                                 ? "bg-muted border-border font-medium text-foreground"
                                 : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                        }`}
+                        } ${draggedTabId === setup.id ? "opacity-40" : ""} ${dragOverTabId === setup.id && draggedTabId !== setup.id ? "ring-2 ring-primary/60" : ""}`}
                         onClick={() => setActiveTabId(setup.id)}
+                        onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDraggedTabId(setup.id); }}
+                        onDragOver={(e) => { e.preventDefault(); setDragOverTabId(setup.id); }}
+                        onDragLeave={() => setDragOverTabId(null)}
+                        onDragEnd={() => { setDraggedTabId(null); setDragOverTabId(null); }}
+                        onDrop={(e) => handleTabDrop(e, setup.id)}
                     >
                         {renamingId === setup.id ? (
                             <RenameInput
@@ -611,7 +663,7 @@ export function SetupTable({
                                             <Pencil className="h-3 w-3" />
                                         </button>
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); handleDeleteSetup(setup.id); }}
+                                            onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(setup.id); }}
                                             className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/20 hover:text-destructive"
                                             aria-label="Delete setup"
                                         >
@@ -653,7 +705,7 @@ export function SetupTable({
                                         <th className="text-left px-3 py-2.5 font-medium text-muted-foreground sticky left-0 bg-muted/50 z-10 min-w-[150px]">
                                             Member
                                         </th>
-                                        {BOSSES.map((boss) => {
+                                        {bossOrder.map((boss) => {
                                             const buffList = bossBuffMap[boss.slug] ?? [];
                                             const allCovered = buffList.length > 0 && buffList.every((b) => b.count > 0);
                                             const anyMissing = buffList.some((b) => b.count === 0);
@@ -662,12 +714,23 @@ export function SetupTable({
                                                 : anyMissing
                                                 ? "bg-yellow-500/20"
                                                 : "bg-muted/50";
+                                            const isDraggingBoss = draggedBossSlug === boss.slug;
+                                            const isDragOverBoss = dragOverBossSlug === boss.slug && draggedBossSlug !== boss.slug;
                                             return (
-                                                <th key={boss.slug} className={`text-center px-2 py-2.5 font-medium text-muted-foreground whitespace-nowrap min-w-[120px] border-l border-border/40 transition-colors ${bgClass}`}>
+                                                <th
+                                                    key={boss.slug}
+                                                    draggable
+                                                    className={`text-center px-2 py-2.5 font-medium text-muted-foreground whitespace-nowrap min-w-[120px] border-l border-border/40 transition-colors cursor-grab active:cursor-grabbing select-none ${bgClass} ${isDraggingBoss ? "opacity-40" : ""} ${isDragOverBoss ? "ring-2 ring-inset ring-primary/60" : ""}`}
+                                                    onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDraggedBossSlug(boss.slug); }}
+                                                    onDragOver={(e) => { e.preventDefault(); setDragOverBossSlug(boss.slug); }}
+                                                    onDragLeave={() => setDragOverBossSlug(null)}
+                                                    onDragEnd={() => { setDraggedBossSlug(null); setDragOverBossSlug(null); }}
+                                                    onDrop={(e) => handleBossDrop(e, boss.slug)}
+                                                >
                                                     <Tooltip>
                                                         <TooltipTrigger
                                                             render={<span />}
-                                                            className="block w-full cursor-default"
+                                                            className="block w-full"
                                                         >
                                                             {boss.name}
                                                         </TooltipTrigger>
@@ -763,7 +826,7 @@ export function SetupTable({
                                         <td className="px-3 py-1.5 sticky left-0 bg-muted/30 text-xs font-medium text-muted-foreground">
                                             Total
                                         </td>
-                                        {BOSSES.map((boss) => {
+                                        {bossOrder.map((boss) => {
                                             const count = bossCountMap[boss.slug] ?? 0;
                                             const over = count > MAX_PER_BOSS;
                                             return (
@@ -782,7 +845,7 @@ export function SetupTable({
                                             <td className="px-3 py-1.5 sticky left-0 bg-muted/10 text-xs font-medium text-muted-foreground whitespace-nowrap">
                                                 Changes
                                             </td>
-                                            {BOSSES.map((boss, i) => {
+                                            {bossOrder.map((boss, i) => {
                                                 if (i === 0) return <td key={boss.slug} className="px-2 py-1.5 text-xs text-muted-foreground/40 text-center border-l border-border/40">—</td>;
                                                 const diff = bossDiffs[i - 1];
                                                 const hasChanges = diff.removed.length > 0 || diff.added.length > 0;
@@ -835,6 +898,28 @@ export function SetupTable({
                     </div>
                 </div>
             )}
+
+            <Dialog open={deleteConfirmId !== null} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
+                <DialogContent showCloseButton={false}>
+                    <DialogHeader>
+                        <DialogTitle>Delete Setup</DialogTitle>
+                        <DialogDescription>
+                            Delete &quot;{setupList.find((s) => s.id === deleteConfirmId)?.name}&quot;? This cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                        <Button
+                            variant="destructive"
+                            onClick={() => {
+                                if (deleteConfirmId) { handleDeleteSetup(deleteConfirmId); setDeleteConfirmId(null); }
+                            }}
+                        >
+                            Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
