@@ -6,6 +6,7 @@ import {
     characters,
     setups,
     setupAssignments,
+    setupBossOrder,
     requests,
     afkEntries,
     authUsers,
@@ -92,7 +93,7 @@ export default async function SetupPage({
         .select()
         .from(setups)
         .where(eq(setups.weekStart, weekStart))
-        .orderBy(asc(setups.createdAt));
+        .orderBy(asc(setups.sortOrder), asc(setups.createdAt));
 
     const assignmentRows = await db
         .select({
@@ -115,6 +116,15 @@ export default async function SetupPage({
         name: s.name,
         assignments: assignmentsBySetup.get(s.id) ?? [],
     }));
+
+    const setupIds = setupList.map((s) => s.id);
+    const bossOrderRows = setupIds.length > 0
+        ? await db.select().from(setupBossOrder).where(inArray(setupBossOrder.setupId, setupIds))
+        : [];
+    const bossOrders: Record<string, string[]> = {};
+    for (const row of bossOrderRows) {
+        try { bossOrders[row.setupId] = JSON.parse(row.bossOrder); } catch { /* ignore malformed */ }
+    }
 
     // Approved requests for this reset week — these characters get a yellow highlight
     const approvedRequests = await db
@@ -157,6 +167,7 @@ export default async function SetupPage({
                 isAdmin={currentMember.isAdmin}
                 members={setupMembers}
                 setups={setupData}
+                bossOrders={bossOrders}
                 requestedCharIds={requestedCharIds}
                 absentMemberIds={absentMemberIds}
             />

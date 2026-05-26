@@ -22,7 +22,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { BOSSES } from "@/data/bosses";
+import { BOSSES, type Boss } from "@/data/bosses";
 import { RAID_BUFFS } from "@/data/raid-buffs";
 import {
     Tooltip,
@@ -71,6 +71,7 @@ interface SetupTableProps {
     isAdmin: boolean;
     members: SetupMember[];
     setups: SetupData[];
+    bossOrders: Record<string, string[]>;
     requestedCharIds: string[];
     absentMemberIds: string[];
 }
@@ -325,6 +326,17 @@ function RenameInput({
     );
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function resolveBossOrder(savedSlugs: string[] | undefined) {
+    if (!savedSlugs?.length) return BOSSES;
+    const bySlug = new Map(BOSSES.map((b) => [b.slug, b]));
+    const ordered = savedSlugs.map((s) => bySlug.get(s)).filter((b): b is Boss => !!b);
+    const seen = new Set(savedSlugs);
+    const extras = BOSSES.filter((b) => !seen.has(b.slug));
+    return [...ordered, ...extras];
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function SetupTable({
@@ -335,6 +347,7 @@ export function SetupTable({
     isAdmin,
     members,
     setups: initialSetups,
+    bossOrders,
     requestedCharIds,
     absentMemberIds,
 }: SetupTableProps) {
@@ -343,7 +356,8 @@ export function SetupTable({
     const [assignments, setAssignments] = useState<AssignmentMap>(buildInitialAssignments(initialSetups));
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [, startTransition] = useTransition();
-    const [bossOrder, setBossOrder] = useState(BOSSES);
+    const [localBossOrders, setLocalBossOrders] = useState<Record<string, string[]>>(bossOrders);
+    const [bossOrder, setBossOrder] = useState(() => resolveBossOrder(bossOrders[initialSetups[0]?.id]));
     const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
     const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
     const [draggedBossSlug, setDraggedBossSlug] = useState<string | null>(null);
@@ -467,6 +481,11 @@ export function SetupTable({
         });
     }, [activeAssignments, bossOrder]);
 
+    useEffect(() => {
+        if (!activeTabId) return;
+        setBossOrder(resolveBossOrder(localBossOrders[activeTabId]));
+    }, [activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
+
     function handleAssignmentChange(setupId: string, memberId: string, bossSlug: string, charId: string | null) {
         const prev = assignments[setupId]?.[memberId]?.[bossSlug] ?? null;
         setAssignments((cur) => ({
@@ -535,31 +554,46 @@ export function SetupTable({
     function handleTabDrop(e: React.DragEvent, targetId: string) {
         e.preventDefault();
         if (!draggedTabId || draggedTabId === targetId) { setDraggedTabId(null); setDragOverTabId(null); return; }
-        setSetupList((prev) => {
-            const list = [...prev];
-            const fromIdx = list.findIndex((s) => s.id === draggedTabId);
-            const toIdx = list.findIndex((s) => s.id === targetId);
-            const [item] = list.splice(fromIdx, 1);
-            list.splice(toIdx, 0, item);
-            return list;
-        });
+        const list = [...setupList];
+        const fromIdx = list.findIndex((s) => s.id === draggedTabId);
+        const toIdx = list.findIndex((s) => s.id === targetId);
+        const [item] = list.splice(fromIdx, 1);
+        list.splice(toIdx, 0, item);
+        setSetupList(list);
         setDraggedTabId(null);
         setDragOverTabId(null);
+        startTransition(async () => {
+            const res = await fetch("/api/setup/reorder", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ order: list.map((s) => s.id) }),
+            });
+            if (!res.ok) toast.error("Failed to save tab order");
+        });
     }
 
     function handleBossDrop(e: React.DragEvent, targetSlug: string) {
         e.preventDefault();
         if (!draggedBossSlug || draggedBossSlug === targetSlug) { setDraggedBossSlug(null); setDragOverBossSlug(null); return; }
-        setBossOrder((prev) => {
-            const list = [...prev];
-            const fromIdx = list.findIndex((b) => b.slug === draggedBossSlug);
-            const toIdx = list.findIndex((b) => b.slug === targetSlug);
-            const [item] = list.splice(fromIdx, 1);
-            list.splice(toIdx, 0, item);
-            return list;
-        });
+        const list = [...bossOrder];
+        const fromIdx = list.findIndex((b) => b.slug === draggedBossSlug);
+        const toIdx = list.findIndex((b) => b.slug === targetSlug);
+        const [item] = list.splice(fromIdx, 1);
+        list.splice(toIdx, 0, item);
+        setBossOrder(list);
         setDraggedBossSlug(null);
         setDragOverBossSlug(null);
+        if (!activeTabId) return;
+        const newSlugs = list.map((b) => b.slug);
+        setLocalBossOrders((prev) => ({ ...prev, [activeTabId]: newSlugs }));
+        startTransition(async () => {
+            const res = await fetch(`/api/setup/${activeTabId}/boss-order`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bossOrder: newSlugs }),
+            });
+            if (!res.ok) toast.error("Failed to save boss order");
+        });
     }
 
     function renderMemberRow(member: SetupMember, i: number, isAbsent: boolean) {
@@ -720,8 +754,8 @@ export function SetupTable({
                                             return (
                                                 <th
                                                     key={boss.slug}
-                                                    draggable
-                                                    className={`text-center px-2 py-2.5 font-medium text-muted-foreground whitespace-nowrap min-w-[120px] border-l border-border/40 transition-colors cursor-grab active:cursor-grabbing select-none ${bgClass} ${isDraggingBoss ? "opacity-40" : ""} ${isDragOverBoss ? "ring-2 ring-inset ring-primary/60" : ""}`}
+                                                    draggable={isAdmin}
+                                                    className={`text-center px-2 py-2.5 font-medium text-muted-foreground whitespace-nowrap min-w-[120px] border-l border-border/40 transition-colors select-none ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""} ${bgClass} ${isDraggingBoss ? "opacity-40" : ""} ${isDragOverBoss ? "ring-2 ring-inset ring-primary/60" : ""}`}
                                                     onDragStart={(e) => { e.dataTransfer.effectAllowed = "move"; setDraggedBossSlug(boss.slug); }}
                                                     onDragOver={(e) => { e.preventDefault(); setDragOverBossSlug(boss.slug); }}
                                                     onDragLeave={() => setDragOverBossSlug(null)}
