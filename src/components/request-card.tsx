@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 import { cn, classColor } from "@/lib/utils";
 
 interface Character {
@@ -89,7 +90,12 @@ export function RequestCard({ request: initial, member, isOwner, isAdmin, charac
       setAdminNote(note ?? "");
       setConfirming(null);
       setNoteText("");
+      if (next === "approved") toast.success("Request approved");
+      else if (next === "rejected") toast.success("Request rejected");
+      else toast.success("Decision undone");
       startTransition(() => router.refresh());
+    } else {
+      toast.error("Failed to update request status");
     }
   }
 
@@ -98,7 +104,9 @@ export function RequestCard({ request: initial, member, isOwner, isAdmin, charac
     const res = await fetch(`/api/requests/${initial.id}`, { method: "DELETE" });
     if (!res.ok) {
       setDeleted(false);
+      toast.error("Failed to delete request");
     } else {
+      toast.success("Request deleted");
       startTransition(() => router.refresh());
     }
   }
@@ -150,7 +158,10 @@ export function RequestCard({ request: initial, member, isOwner, isAdmin, charac
       setStatus("pending");
       setAdminNote("");
       setIsEditing(false);
+      toast.success("Request updated");
       startTransition(() => router.refresh());
+    } else {
+      toast.error("Failed to update request");
     }
   }
 

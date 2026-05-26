@@ -24,6 +24,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { LinkIcon, PencilIcon, Trash2Icon } from "lucide-react";
+import { toast } from "sonner";
 
 export interface AdminMember {
     id: string;
@@ -262,7 +263,7 @@ export function AdminMembersTable({ members, discordUsers, currentMemberId }: Ad
         });
         if (!res.ok) {
             const { error } = await res.json().catch(() => ({ error: "Failed" }));
-            alert(error ?? "Failed to update admin status");
+            toast.error(error ?? "Failed to update admin status");
             return;
         }
         router.refresh();
@@ -274,7 +275,11 @@ export function AdminMembersTable({ members, discordUsers, currentMemberId }: Ad
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userId }),
         });
-        if (!res.ok) throw new Error("Failed to update link");
+        if (!res.ok) {
+            toast.error("Failed to update player link");
+            throw new Error("Failed to update link");
+        }
+        toast.success(userId ? "Player linked" : "Player unlinked");
         router.refresh();
     }
 
@@ -284,7 +289,11 @@ export function AdminMembersTable({ members, discordUsers, currentMemberId }: Ad
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ battletag }),
         });
-        if (!res.ok) throw new Error("Failed to update battletag");
+        if (!res.ok) {
+            toast.error("Failed to update battletag");
+            throw new Error("Failed to update battletag");
+        }
+        toast.success("Battletag updated");
         router.refresh();
     }
 
@@ -292,9 +301,10 @@ export function AdminMembersTable({ members, discordUsers, currentMemberId }: Ad
         const res = await fetch(`/api/admin/members/${memberId}`, { method: "DELETE" });
         if (!res.ok) {
             const { error } = await res.json().catch(() => ({ error: "Failed" }));
-            alert(error ?? "Failed to delete member");
+            toast.error(error ?? "Failed to delete member");
             return;
         }
+        toast.success("Member deleted");
         router.refresh();
     }
 

@@ -528,6 +528,7 @@ export function SetupTable({
         startTransition(async () => {
             const res = await fetch(`/api/setup/${id}`, { method: "DELETE" });
             if (!res.ok) toast.error("Failed to delete setup");
+            else toast.success("Setup deleted");
         });
     }
 
