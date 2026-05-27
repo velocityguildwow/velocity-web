@@ -160,6 +160,7 @@ export default async function SetupPage({
             </div>
 
             <SetupTable
+                key={weekStart}
                 weekStart={weekStart}
                 weekLabel={formatWeekRange(weekStart)}
                 prevWeekStart={getAdjacentWeek(weekStart, -1)}
