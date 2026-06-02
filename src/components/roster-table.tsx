@@ -71,7 +71,7 @@ export function RosterTable({ members: initial, currentMemberId, isAdmin, reques
         }
         return map;
     });
-    const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+    const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(initial.map((m) => m.id)));
     const [, startTransition] = useTransition();
 
     function toggleCollapsed(memberId: string) {
