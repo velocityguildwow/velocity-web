@@ -13,4 +13,5 @@ export const BOSSES: Boss[] = [
   { slug: "alleria", name: "Alleria" },
   { slug: "birdie", name: "Birdie" },
   { slug: "lura", name: "Lura" },
+  { slug: "rotmire", name: "Rotmire" },
 ];
