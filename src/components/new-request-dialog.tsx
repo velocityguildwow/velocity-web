@@ -32,9 +32,10 @@ interface Character {
 interface NewRequestDialogProps {
   memberId: string;
   characters: Character[];
+  weekLabel: string;
 }
 
-export function NewRequestDialog({ memberId, characters }: NewRequestDialogProps) {
+export function NewRequestDialog({ memberId, characters, weekLabel }: NewRequestDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -82,6 +83,7 @@ export function NewRequestDialog({ memberId, characters }: NewRequestDialogProps
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Submit a Request</DialogTitle>
+          <p className="text-sm text-muted-foreground">Reset: {weekLabel}</p>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="space-y-2">

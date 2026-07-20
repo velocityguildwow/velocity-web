@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import {
     members,
     requests,
-    getCurrentWeekStart,
+    getNextWeekStart,
 } from "@ravxd/velocitydb";
 import { db } from "@/lib/db";
 
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const weekStart = getCurrentWeekStart();
+    const weekStart = getNextWeekStart();
 
     await db.insert(requests).values({
         memberId,

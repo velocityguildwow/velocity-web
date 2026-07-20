@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { members, requests, characters } from "@ravxd/velocitydb";
 import { db } from "@/lib/db";
-import { formatWeekRange } from "@ravxd/velocitydb";
+import { formatWeekRange, getNextWeekStart } from "@ravxd/velocitydb";
 import { Separator } from "@/components/ui/separator";
 import { RequestCard } from "@/components/request-card";
 import { NewRequestDialog } from "@/components/new-request-dialog";
@@ -49,6 +49,8 @@ export default async function RequestsPage() {
         .from(characters)
         .where(eq(characters.memberId, currentMember.id));
 
+    const nextWeekLabel = formatWeekRange(getNextWeekStart());
+
     return (
         <div className="space-y-8">
             <div className="flex items-center justify-between">
@@ -61,6 +63,7 @@ export default async function RequestsPage() {
                 <NewRequestDialog
                     memberId={currentMember.id}
                     characters={memberCharacters}
+                    weekLabel={nextWeekLabel}
                 />
             </div>
 

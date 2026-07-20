@@ -10,7 +10,7 @@ import {
     requests,
     afkEntries,
     authUsers,
-    getCurrentWeekStart,
+    getNextWeekStart,
     formatWeekRange,
 } from "@ravxd/velocitydb";
 import { db } from "@/lib/db";
@@ -37,7 +37,7 @@ export default async function SetupPage({
     if (!session?.user?.id) redirect("/login");
 
     const { week } = await searchParams;
-    const weekStart = week ?? getCurrentWeekStart();
+    const weekStart = week ?? getNextWeekStart();
 
 
     const [currentMember] = await db
