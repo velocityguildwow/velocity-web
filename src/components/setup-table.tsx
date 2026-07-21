@@ -110,47 +110,11 @@ const MAX_PER_BOSS = 20;
 
 type PlayerRole = "tank" | "healer" | "melee" | "ranged" | "unknown";
 
-const TANK_SPECS: Record<string, string[]> = {
-    "Warrior":      ["Protection"],
-    "Paladin":      ["Protection"],
-    "Death Knight": ["Blood"],
-    "Monk":         ["Brewmaster"],
-    "Druid":        ["Guardian"],
-    "Demon Hunter": ["Vengeance"],
-};
-
-const HEALER_SPECS: Record<string, string[]> = {
-    "Paladin":  ["Holy"],
-    "Priest":   ["Holy", "Discipline"],
-    "Shaman":   ["Restoration"],
-    "Druid":    ["Restoration"],
-    "Monk":     ["Mistweaver"],
-    "Evoker":   ["Preservation"],
-};
-
-const MELEE_SPECS: Record<string, string[]> = {
-    "Warrior":      ["Arms", "Fury"],
-    "Rogue":        ["Assassination", "Outlaw", "Subtlety"],
-    "Death Knight": ["Unholy", "Frost"],
-    "Demon Hunter": ["Havoc"],
-    "Monk":         ["Windwalker"],
-    "Paladin":      ["Retribution"],
-    "Shaman":       ["Enhancement"],
-    "Druid":        ["Feral"],
-};
+const VALID_ROLES: PlayerRole[] = ["tank", "healer", "melee", "ranged"];
 
 function classifyRole(member: SetupMember): PlayerRole {
-    const roleHint = member.wowutilsMainRole?.toLowerCase() ?? "";
-    if (roleHint.includes("tank")) return "tank";
-    if (roleHint.includes("heal")) return "healer";
-
-    const mainChar = member.characters.find((c) => c.isMain) ?? member.characters[0];
-    if (!mainChar) return "unknown";
-
-    if (TANK_SPECS[mainChar.class]?.includes(mainChar.spec)) return "tank";
-    if (HEALER_SPECS[mainChar.class]?.includes(mainChar.spec)) return "healer";
-    if (MELEE_SPECS[mainChar.class]?.includes(mainChar.spec)) return "melee";
-    return "ranged";
+    const role = member.wowutilsMainRole?.toLowerCase() as PlayerRole | undefined;
+    return role && VALID_ROLES.includes(role) ? role : "unknown";
 }
 
 function rankPriority(rank: string | null) {

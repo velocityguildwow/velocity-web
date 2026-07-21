@@ -141,7 +141,7 @@ export default async function SetupPage({
         .filter((id): id is string => id !== null);
 
     // Raid days for this reset: last day (Tue = weekStart+6), Wed, Thu
-    const raidDays = [addDays(weekStart, 6), addDays(weekStart, 7), addDays(weekStart, 8)];
+    const raidDays = [addDays(weekStart, 6), weekStart, addDays(weekStart, 1)];
 
     // Members AFK on any raid day — shown below a divider with red name
     const afkRows = await db
