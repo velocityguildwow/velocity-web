@@ -15,6 +15,8 @@ import {
 } from "@ravxd/velocitydb";
 import { db } from "@/lib/db";
 import { SetupTable } from "@/components/setup-table";
+import { RAID_TIERS } from "@/data/bosses";
+import { parseBossOrderMap, type BossOrderMap } from "@/lib/boss-order";
 
 export const dynamic = "force-dynamic";
 
@@ -121,10 +123,21 @@ export default async function SetupPage({
     const bossOrderRows = setupIds.length > 0
         ? await db.select().from(setupBossOrder).where(inArray(setupBossOrder.setupId, setupIds))
         : [];
-    const bossOrders: Record<string, string[]> = {};
+    const bossOrders: Record<string, BossOrderMap> = {};
     for (const row of bossOrderRows) {
-        try { bossOrders[row.setupId] = JSON.parse(row.bossOrder); } catch { /* ignore malformed */ }
+        bossOrders[row.setupId] = parseBossOrderMap(row.bossOrder);
     }
+
+    // Infer which raid tier this week's data belongs to from whatever boss
+    // slugs are already in use; brand-new weeks with no data default to latest.
+    const usedSlugs = new Set<string>();
+    for (const a of assignmentRows) usedSlugs.add(a.bossSlug);
+    for (const map of Object.values(bossOrders)) {
+        for (const slugs of Object.values(map)) for (const s of slugs) usedSlugs.add(s);
+    }
+    const initialTierId =
+        RAID_TIERS.find((t) => t.bosses.some((b) => usedSlugs.has(b.slug)))?.id ??
+        RAID_TIERS[RAID_TIERS.length - 1].id;
 
     // Approved requests for this reset week — these characters get a yellow highlight
     const approvedRequests = await db
@@ -169,6 +182,7 @@ export default async function SetupPage({
                 members={setupMembers}
                 setups={setupData}
                 bossOrders={bossOrders}
+                initialTierId={initialTierId}
                 requestedCharIds={requestedCharIds}
                 absentMemberIds={absentMemberIds}
             />

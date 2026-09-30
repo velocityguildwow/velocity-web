@@ -22,8 +22,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { BOSSES, type Boss } from "@/data/bosses";
+import { RAID_TIERS, type Boss } from "@/data/bosses";
 import { RAID_BUFFS } from "@/data/raid-buffs";
+import { type BossOrderMap } from "@/lib/boss-order";
 import {
     Tooltip,
     TooltipProvider,
@@ -71,9 +72,10 @@ interface SetupTableProps {
     isAdmin: boolean;
     members: SetupMember[];
     setups: SetupData[];
-    bossOrders: Record<string, string[]>;
+    bossOrders: Record<string, BossOrderMap>;
     requestedCharIds: string[];
     absentMemberIds: string[];
+    initialTierId: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -292,12 +294,13 @@ function RenameInput({
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function resolveBossOrder(savedSlugs: string[] | undefined) {
-    if (!savedSlugs?.length) return BOSSES;
-    const bySlug = new Map(BOSSES.map((b) => [b.slug, b]));
+function resolveBossOrder(savedMap: BossOrderMap | undefined, tierId: string, tierBosses: Boss[]) {
+    const savedSlugs = savedMap?.[tierId];
+    if (!savedSlugs?.length) return tierBosses;
+    const bySlug = new Map(tierBosses.map((b) => [b.slug, b]));
     const ordered = savedSlugs.map((s) => bySlug.get(s)).filter((b): b is Boss => !!b);
     const seen = new Set(savedSlugs);
-    const extras = BOSSES.filter((b) => !seen.has(b.slug));
+    const extras = tierBosses.filter((b) => !seen.has(b.slug));
     return [...ordered, ...extras];
 }
 
@@ -314,14 +317,22 @@ export function SetupTable({
     bossOrders,
     requestedCharIds,
     absentMemberIds,
+    initialTierId,
 }: SetupTableProps) {
     const [setupList, setSetupList] = useState(initialSetups);
     const [activeTabId, setActiveTabId] = useState<string | null>(initialSetups[0]?.id ?? null);
     const [assignments, setAssignments] = useState<AssignmentMap>(buildInitialAssignments(initialSetups));
     const [renamingId, setRenamingId] = useState<string | null>(null);
     const [, startTransition] = useTransition();
-    const [localBossOrders, setLocalBossOrders] = useState<Record<string, string[]>>(bossOrders);
-    const [bossOrder, setBossOrder] = useState(() => resolveBossOrder(bossOrders[initialSetups[0]?.id]));
+    const [localBossOrders, setLocalBossOrders] = useState<Record<string, BossOrderMap>>(bossOrders);
+    const [raidTierId, setRaidTierId] = useState(initialTierId);
+    const tierBosses = useMemo(
+        () => RAID_TIERS.find((t) => t.id === raidTierId)?.bosses ?? RAID_TIERS[RAID_TIERS.length - 1].bosses,
+        [raidTierId]
+    );
+    const [bossOrder, setBossOrder] = useState(() =>
+        resolveBossOrder(bossOrders[initialSetups[0]?.id], initialTierId, tierBosses)
+    );
     const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
     const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
     const [draggedBossSlug, setDraggedBossSlug] = useState<string | null>(null);
@@ -374,7 +385,7 @@ export function SetupTable({
     // A character cannot appear on the same boss in more than one tab.
     const usedCharsByBoss = useMemo(() => {
         const map = new Map<string, Set<string>>();
-        for (const boss of BOSSES) {
+        for (const boss of tierBosses) {
             const used = new Set<string>();
             for (const sa of Object.values(assignments)) {
                 for (const ma of Object.values(sa)) {
@@ -385,13 +396,13 @@ export function SetupTable({
             map.set(boss.slug, used);
         }
         return map;
-    }, [assignments]);
+    }, [assignments, tierBosses]);
 
     const activeAssignments = activeTabId ? (assignments[activeTabId] ?? {}) : {};
 
     const bossBuffMap = useMemo(() => {
         const result: Record<string, Array<{ name: string; count: number }>> = {};
-        for (const boss of BOSSES) {
+        for (const boss of tierBosses) {
             const charIds = Object.values(activeAssignments)
                 .map((ma) => ma[boss.slug])
                 .filter((id): id is string => !!id);
@@ -401,7 +412,7 @@ export function SetupTable({
             }));
         }
         return result;
-    }, [activeAssignments, charIdToClass]);
+    }, [activeAssignments, charIdToClass, tierBosses]);
 
     // How many boss slots each character fills in the active tab
     const charBossCountMap = useMemo(() => {
@@ -417,13 +428,13 @@ export function SetupTable({
     // Count assigned characters per boss column for the active tab
     const bossCountMap = useMemo(() => {
         const counts: Record<string, number> = {};
-        for (const boss of BOSSES) {
+        for (const boss of tierBosses) {
             counts[boss.slug] = Object.values(activeAssignments).filter(
                 (ma) => !!ma[boss.slug]
             ).length;
         }
         return counts;
-    }, [activeAssignments]);
+    }, [activeAssignments, tierBosses]);
 
     // Boss-to-boss diff: for each consecutive pair, which chars were added/removed
     const bossDiffs = useMemo(() => {
@@ -447,8 +458,8 @@ export function SetupTable({
 
     useEffect(() => {
         if (!activeTabId) return;
-        setBossOrder(resolveBossOrder(localBossOrders[activeTabId]));
-    }, [activeTabId]); // eslint-disable-line react-hooks/exhaustive-deps
+        setBossOrder(resolveBossOrder(localBossOrders[activeTabId], raidTierId, tierBosses));
+    }, [activeTabId, raidTierId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     function handleAssignmentChange(setupId: string, memberId: string, bossSlug: string, charId: string | null) {
         const prev = assignments[setupId]?.[memberId]?.[bossSlug] ?? null;
@@ -549,12 +560,15 @@ export function SetupTable({
         setDragOverBossSlug(null);
         if (!activeTabId) return;
         const newSlugs = list.map((b) => b.slug);
-        setLocalBossOrders((prev) => ({ ...prev, [activeTabId]: newSlugs }));
+        setLocalBossOrders((prev) => ({
+            ...prev,
+            [activeTabId]: { ...prev[activeTabId], [raidTierId]: newSlugs },
+        }));
         startTransition(async () => {
             const res = await fetch(`/api/setup/${activeTabId}/boss-order`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ bossOrder: newSlugs }),
+                body: JSON.stringify({ bossOrder: newSlugs, tierId: raidTierId }),
             });
             if (!res.ok) toast.error("Failed to save boss order");
         });
@@ -614,15 +628,32 @@ export function SetupTable({
 
     return (
         <div className="space-y-4">
-            {/* Week navigation */}
-            <div className="flex items-center gap-3 text-sm">
-                <Link href={`/setup?week=${prevWeekStart}`} className="p-1 rounded hover:bg-muted transition-colors" aria-label="Previous week">
-                    <ChevronLeft className="h-4 w-4" />
-                </Link>
-                <span className="font-medium min-w-[160px] text-center">{weekLabel}</span>
-                <Link href={`/setup?week=${nextWeekStart}`} className="p-1 rounded hover:bg-muted transition-colors" aria-label="Next week">
-                    <ChevronRight className="h-4 w-4" />
-                </Link>
+            {/* Week navigation + raid tier */}
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3 text-sm">
+                    <Link href={`/setup?week=${prevWeekStart}`} className="p-1 rounded hover:bg-muted transition-colors" aria-label="Previous week">
+                        <ChevronLeft className="h-4 w-4" />
+                    </Link>
+                    <span className="font-medium min-w-[160px] text-center">{weekLabel}</span>
+                    <Link href={`/setup?week=${nextWeekStart}`} className="p-1 rounded hover:bg-muted transition-colors" aria-label="Next week">
+                        <ChevronRight className="h-4 w-4" />
+                    </Link>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">Raid</span>
+                    <Select value={raidTierId} onValueChange={(val) => val && setRaidTierId(val)}>
+                        <SelectTrigger size="sm" className="h-8 w-[200px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                            {RAID_TIERS.map((tier) => (
+                                <SelectItem key={tier.id} value={tier.id} label={tier.name}>
+                                    {tier.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
             {/* Tab bar */}
@@ -731,7 +762,12 @@ export function SetupTable({
                                                             render={<span />}
                                                             className="block w-full"
                                                         >
-                                                            {boss.name}
+                                                            <span className="block">{boss.name}</span>
+                                                            {boss.nickname && (
+                                                                <span className="block text-[10px] font-normal text-muted-foreground/70">
+                                                                    {boss.nickname}
+                                                                </span>
+                                                            )}
                                                         </TooltipTrigger>
                                                         <TooltipContent className="w-56 px-3 py-2.5 text-xs">
                                                             <div className="font-semibold text-sm mb-2">Raid Buffs</div>
@@ -757,7 +793,7 @@ export function SetupTable({
                                     {/* Tanks */}
                                     {sortedMembers.tanks.length > 0 && <>
                                         <tr key="hdr-tanks">
-                                            <td colSpan={BOSSES.length + 1} className="px-3 py-1 text-xs font-bold text-foreground/80 bg-muted/30 uppercase tracking-wider">
+                                            <td colSpan={tierBosses.length + 1} className="px-3 py-1 text-xs font-bold text-foreground/80 bg-muted/30 uppercase tracking-wider">
                                                 Tanks
                                             </td>
                                         </tr>
@@ -767,7 +803,7 @@ export function SetupTable({
                                     {/* Healers */}
                                     {sortedMembers.healers.length > 0 && <>
                                         <tr key="hdr-healers">
-                                            <td colSpan={BOSSES.length + 1} className={`px-3 py-1 text-xs font-bold text-foreground/80 bg-muted/30 uppercase tracking-wider ${sortedMembers.tanks.length > 0 ? "border-t-2 border-border/60" : ""}`}>
+                                            <td colSpan={tierBosses.length + 1} className={`px-3 py-1 text-xs font-bold text-foreground/80 bg-muted/30 uppercase tracking-wider ${sortedMembers.tanks.length > 0 ? "border-t-2 border-border/60" : ""}`}>
                                                 Healers
                                             </td>
                                         </tr>
@@ -777,13 +813,13 @@ export function SetupTable({
                                     {/* DPS super-header + Melee + Ranged */}
                                     {(sortedMembers.melee.length > 0 || sortedMembers.ranged.length > 0) && <>
                                         <tr key="hdr-dps">
-                                            <td colSpan={BOSSES.length + 1} className={`px-3 py-1 text-xs font-bold text-foreground/80 bg-muted/30 uppercase tracking-wider ${(sortedMembers.tanks.length > 0 || sortedMembers.healers.length > 0) ? "border-t-2 border-border/60" : ""}`}>
+                                            <td colSpan={tierBosses.length + 1} className={`px-3 py-1 text-xs font-bold text-foreground/80 bg-muted/30 uppercase tracking-wider ${(sortedMembers.tanks.length > 0 || sortedMembers.healers.length > 0) ? "border-t-2 border-border/60" : ""}`}>
                                                 DPS
                                             </td>
                                         </tr>
                                         {sortedMembers.melee.length > 0 && <>
                                             <tr key="hdr-melee">
-                                                <td colSpan={BOSSES.length + 1} className="px-4 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/40 bg-muted/10">
+                                                <td colSpan={tierBosses.length + 1} className="px-4 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/40 bg-muted/10">
                                                     Melee
                                                 </td>
                                             </tr>
@@ -791,7 +827,7 @@ export function SetupTable({
                                         </>}
                                         {sortedMembers.ranged.length > 0 && <>
                                             <tr key="hdr-ranged">
-                                                <td colSpan={BOSSES.length + 1} className={`px-4 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/40 bg-muted/10 ${sortedMembers.melee.length > 0 ? "border-t border-border/40" : ""}`}>
+                                                <td colSpan={tierBosses.length + 1} className={`px-4 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/40 bg-muted/10 ${sortedMembers.melee.length > 0 ? "border-t border-border/40" : ""}`}>
                                                     Ranged
                                                 </td>
                                             </tr>
@@ -802,7 +838,7 @@ export function SetupTable({
                                     {/* Unknown / unclassified */}
                                     {sortedMembers.unknown.length > 0 && <>
                                         <tr key="hdr-other">
-                                            <td colSpan={BOSSES.length + 1} className="px-3 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/50 bg-muted/20 border-t-2 border-border/60">
+                                            <td colSpan={tierBosses.length + 1} className="px-3 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-muted-foreground/50 bg-muted/20 border-t-2 border-border/60">
                                                 Other
                                             </td>
                                         </tr>
@@ -812,7 +848,7 @@ export function SetupTable({
                                     {/* Absent */}
                                     {sortedMembers.absent.length > 0 && <>
                                         <tr key="hdr-absent">
-                                            <td colSpan={BOSSES.length + 1} className="px-3 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-red-400/60 bg-red-500/5 border-t-2 border-red-500/30">
+                                            <td colSpan={tierBosses.length + 1} className="px-3 py-0.5 text-[10px] uppercase tracking-widest font-semibold text-red-400/60 bg-red-500/5 border-t-2 border-red-500/30">
                                                 Absent this reset
                                             </td>
                                         </tr>
