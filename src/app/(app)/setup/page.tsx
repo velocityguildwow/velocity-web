@@ -72,6 +72,7 @@ export default async function SetupPage({
             class: characters.class,
             spec: characters.spec,
             isReady: characters.isReady,
+            itemLevel: characters.itemLevel,
             isMain: characters.isMain,
         })
         .from(characters);

@@ -40,6 +40,7 @@ export interface SetupCharacter {
     class: string;
     spec: string;
     isReady: boolean;
+    itemLevel: number | null;
     isMain: boolean;
 }
 
@@ -251,6 +252,11 @@ function AssignmentCell({
                             )}
                             {inUse && (
                                 <span className="text-muted-foreground/50 text-[10px]">(in use)</span>
+                            )}
+                            {char.itemLevel != null && (
+                                <span className="ml-auto pl-3 text-xs tabular-nums text-muted-foreground">
+                                    {char.itemLevel}
+                                </span>
                             )}
                         </SelectItem>
                     );
