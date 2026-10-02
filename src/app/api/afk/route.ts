@@ -36,6 +36,51 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
 }
 
+export async function PATCH(req: NextRequest) {
+    const session = await auth();
+    if (!session?.user?.id) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { afkDate, notes } = await req.json();
+    if (!afkDate || typeof afkDate !== "string") {
+        return NextResponse.json({ error: "Invalid date" }, { status: 400 });
+    }
+    if (notes != null && typeof notes !== "string") {
+        return NextResponse.json({ error: "Invalid notes" }, { status: 400 });
+    }
+
+    const [member] = await db
+        .select()
+        .from(members)
+        .where(eq(members.discordId, session.user.id))
+        .limit(1);
+
+    if (!member) {
+        return NextResponse.json(
+            { error: "Member not found" },
+            { status: 404 },
+        );
+    }
+
+    const updated = await db
+        .update(afkEntries)
+        .set({ notes: notes?.trim() || null })
+        .where(
+            and(
+                eq(afkEntries.memberId, member.id),
+                eq(afkEntries.afkDate, afkDate),
+            ),
+        )
+        .returning({ id: afkEntries.id });
+
+    if (updated.length === 0) {
+        return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({ ok: true });
+}
+
 export async function DELETE(req: NextRequest) {
     const session = await auth();
     if (!session?.user?.id) {

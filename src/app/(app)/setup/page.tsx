@@ -39,7 +39,8 @@ export default async function SetupPage({
     if (!session?.user?.id) redirect("/login");
 
     const { week } = await searchParams;
-    const weekStart = week ?? getNextWeekStart();
+    // The ?week= param is the reset's Tuesday; weeks are stored keyed by the following Wednesday.
+    const weekStart = week ? addDays(week, 1) : getNextWeekStart();
 
 
     const [currentMember] = await db
@@ -154,15 +155,21 @@ export default async function SetupPage({
         .map((r) => r.characterId)
         .filter((id): id is string => id !== null);
 
-    // Raid days for this reset: last day (Tue = weekStart+6), Wed, Thu
-    const raidDays = [addDays(weekStart, 6), weekStart, addDays(weekStart, 1)];
+    // Raid days for this reset: Tue (reset day, weekStart-1), Wed, Thu.
+    // The next reset's Tuesday (weekStart+6) belongs to that reset, not this one.
+    const raidDays = [addDays(weekStart, -1), weekStart, addDays(weekStart, 1)];
 
     // Members AFK on any raid day — shown below a divider with red name
     const afkRows = await db
-        .select({ memberId: afkEntries.memberId })
+        .select({ memberId: afkEntries.memberId, afkDate: afkEntries.afkDate })
         .from(afkEntries)
-        .where(inArray(afkEntries.afkDate, raidDays));
-    const absentMemberIds = [...new Set(afkRows.map((a) => a.memberId))];
+        .where(inArray(afkEntries.afkDate, raidDays))
+        .orderBy(asc(afkEntries.afkDate));
+    const absentDates: Record<string, string[]> = {};
+    for (const { memberId, afkDate } of afkRows) {
+        (absentDates[memberId] ??= []).push(String(afkDate));
+    }
+    const absentMemberIds = Object.keys(absentDates);
 
     return (
         <div className="space-y-6">
@@ -177,8 +184,8 @@ export default async function SetupPage({
                 key={weekStart}
                 weekStart={weekStart}
                 weekLabel={formatWeekRange(weekStart)}
-                prevWeekStart={getAdjacentWeek(weekStart, -1)}
-                nextWeekStart={getAdjacentWeek(weekStart, 1)}
+                prevWeekStart={addDays(getAdjacentWeek(weekStart, -1), -1)}
+                nextWeekStart={addDays(getAdjacentWeek(weekStart, 1), -1)}
                 isAdmin={currentMember.isAdmin}
                 members={setupMembers}
                 setups={setupData}
@@ -186,6 +193,7 @@ export default async function SetupPage({
                 initialTierId={initialTierId}
                 requestedCharIds={requestedCharIds}
                 absentMemberIds={absentMemberIds}
+                absentDates={absentDates}
             />
         </div>
     );

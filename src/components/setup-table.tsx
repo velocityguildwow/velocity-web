@@ -76,7 +76,19 @@ interface SetupTableProps {
     bossOrders: Record<string, BossOrderMap>;
     requestedCharIds: string[];
     absentMemberIds: string[];
+    absentDates: Record<string, string[]>;
     initialTierId: string;
+}
+
+const ABSENT_DATE_FMT = new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+});
+
+function formatAbsentDate(dateStr: string): string {
+    return ABSENT_DATE_FMT.format(new Date(dateStr + "T00:00:00Z"));
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -323,6 +335,7 @@ export function SetupTable({
     bossOrders,
     requestedCharIds,
     absentMemberIds,
+    absentDates,
     initialTierId,
 }: SetupTableProps) {
     const [setupList, setSetupList] = useState(initialSetups);
@@ -587,17 +600,39 @@ export function SetupTable({
             <tr key={member.id} className={`border-b border-border/40 last:border-b-0 ${rowBg}`}>
                 {/* Member name cell */}
                 <td className={`px-3 py-1.5 sticky left-0 z-10 border-r border-border/30 ${rowBg}`}>
-                    <div className={`flex items-center gap-2 px-2 py-0.5 rounded ${isAbsent ? "bg-red-500/15" : ""} ${isOfficer ? "border-l-2 border-purple-500/70" : ""}`}>
-                        <Avatar className="h-5 w-5 shrink-0">
-                            <AvatarImage src={member.discordImage ?? undefined} />
-                            <AvatarFallback className="text-[9px]">
-                                {member.displayName.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                        </Avatar>
-                        <span className={`text-sm font-medium truncate max-w-[110px] ${isAbsent ? "text-red-400" : "text-foreground"}`}>
-                            {member.displayName}
-                        </span>
-                    </div>
+                    {(() => {
+                        const dates = absentDates[member.id] ?? [];
+                        const containerClass = `flex items-center gap-2 px-2 py-0.5 rounded ${isAbsent ? "bg-red-500/15" : ""} ${isOfficer ? "border-l-2 border-purple-500/70" : ""}`;
+                        const content = (
+                            <>
+                                <Avatar className="h-5 w-5 shrink-0">
+                                    <AvatarImage src={member.discordImage ?? undefined} />
+                                    <AvatarFallback className="text-[9px]">
+                                        {member.displayName.slice(0, 2).toUpperCase()}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <span className={`text-sm font-medium truncate max-w-[110px] ${isAbsent ? "text-red-400" : "text-foreground"}`}>
+                                    {member.displayName}
+                                </span>
+                            </>
+                        );
+                        if (dates.length === 0) return <div className={containerClass}>{content}</div>;
+                        return (
+                            <TooltipProvider delay={200}>
+                                <Tooltip>
+                                    <TooltipTrigger render={<div />} className={containerClass}>
+                                        {content}
+                                    </TooltipTrigger>
+                                    <TooltipContent className="px-3 py-2 text-xs">
+                                        <div className="font-semibold mb-1">Absent</div>
+                                        {dates.map((d) => (
+                                            <div key={d} className="text-muted-foreground">{formatAbsentDate(d)}</div>
+                                        ))}
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        );
+                    })()}
                 </td>
 
                 {/* Boss assignment cells */}

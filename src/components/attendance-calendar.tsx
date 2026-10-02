@@ -12,7 +12,7 @@ import { isToday } from "date-fns/isToday";
 import { format } from "date-fns/format";
 import { addMonths } from "date-fns/addMonths";
 import { subMonths } from "date-fns/subMonths";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
@@ -52,6 +52,9 @@ export function AttendanceCalendar({
   const [noteValues, setNoteValues] = useState<Record<string, string>>({});
   const [pendingAdd, setPendingAdd] = useState<Set<string>>(new Set());
   const [pendingRemove, setPendingRemove] = useState<Set<string>>(new Set());
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [pendingEdit, setPendingEdit] = useState(false);
 
   const monthStart = startOfMonth(month);
   const monthEnd = endOfMonth(month);
@@ -75,6 +78,26 @@ export function AttendanceCalendar({
     setPendingAdd((prev) => { const s = new Set(prev); s.delete(date); return s; });
     if (res.ok) {
       setNoteValues((prev) => { const n = { ...prev }; delete n[date]; return n; });
+      router.refresh();
+    }
+  }
+
+  function startEdit(entry: AfkEntry) {
+    setEditingId(entry.id);
+    setEditValue(entry.notes ?? "");
+  }
+
+  async function saveEdit(entry: AfkEntry) {
+    if (pendingEdit) return;
+    setPendingEdit(true);
+    const res = await fetch("/api/afk", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ afkDate: entry.afkDate, notes: editValue.trim() || null }),
+    });
+    setPendingEdit(false);
+    if (res.ok) {
+      setEditingId(null);
       router.refresh();
     }
   }
@@ -194,21 +217,62 @@ export function AttendanceCalendar({
                           <p className="text-xs font-medium truncate">
                             {e.member.displayName}
                           </p>
-                          {e.notes && (
-                            <p className="text-xs text-muted-foreground truncate">
-                              {e.notes}
-                            </p>
+                          {editingId === e.id ? (
+                            <div className="space-y-1.5 mt-1">
+                              <Textarea
+                                autoFocus
+                                placeholder="Note (optional)"
+                                value={editValue}
+                                onChange={(ev) => setEditValue(ev.target.value)}
+                                className="text-xs min-h-[52px] resize-none"
+                              />
+                              <div className="flex gap-1.5">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1 text-xs h-7"
+                                  disabled={pendingEdit}
+                                  onClick={() => saveEdit(e)}
+                                >
+                                  {pendingEdit ? "Saving…" : "Save"}
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="flex-1 text-xs h-7"
+                                  disabled={pendingEdit}
+                                  onClick={() => setEditingId(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            e.notes && (
+                              <p className="text-xs text-muted-foreground truncate">
+                                {e.notes}
+                              </p>
+                            )
                           )}
                         </div>
-                        {e.memberId === currentMemberId && (
-                          <button
-                            onClick={() => removeAfk(e.id, e.afkDate)}
-                            disabled={pendingRemove.has(e.id)}
-                            className="shrink-0 p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
-                            aria-label="Remove AFK"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
+                        {e.memberId === currentMemberId && editingId !== e.id && (
+                          <div className="flex shrink-0 gap-0.5">
+                            <button
+                              onClick={() => startEdit(e)}
+                              className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                              aria-label="Edit note"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => removeAfk(e.id, e.afkDate)}
+                              disabled={pendingRemove.has(e.id)}
+                              className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors disabled:opacity-50"
+                              aria-label="Remove AFK"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
                         )}
                       </li>
                     ))}
