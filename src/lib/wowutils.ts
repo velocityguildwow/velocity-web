@@ -49,5 +49,8 @@ export async function fetchRoster(): Promise<WowutilsMember[]> {
   const data = await wowutilsFetch<WowutilsRoster>(
     `/groups/${groupId}/roster`
   );
-  return data.members;
+  return data.members.map((m) => ({
+    ...m,
+    characters: m.characters.filter((c) => !c.inactive),
+  }));
 }
